@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Tag,
-  Settings, LogOut, Store, ChevronRight, Palette, PackagePlus, PenLine, MessageSquare, FolderTree, Mail, RefreshCw, Sparkles, Gauge, AlertTriangle,
+  Settings, LogOut, Store, ChevronRight, Palette, PackagePlus, PenLine, MessageSquare, FolderTree, Mail, RefreshCw, Sparkles, Gauge, AlertTriangle, Truck,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -19,6 +19,7 @@ const nav: { to: string; icon: any; label: string; end?: boolean; badge?: boolea
   { to: '/supplier/import', icon: PackagePlus, label: 'Import' },
   { to: '/sync', icon: RefreshCw, label: 'Sync', badge: true },
   { to: '/orders', icon: ShoppingCart, label: 'Orders' },
+  { to: '/fulfillment-queue', icon: Truck, label: 'Fulfillment Queue', badge: true },
   { to: '/claims', icon: AlertTriangle, label: 'Claims', badge: true },
   { to: '/customers', icon: Users, label: 'Customers' },
   { to: '/discounts', icon: Tag, label: 'Discounts' },
@@ -34,18 +35,20 @@ export default function AdminLayout() {
   const navigate = useNavigate()
   const [syncAlertCount, setSyncAlertCount] = useState(0)
   const [claimsCount, setClaimsCount] = useState(0)
+  const [fulfillmentCount, setFulfillmentCount] = useState(0)
 
   useEffect(() => {
     const poll = () => {
       api.get('/api/admin/sync/alerts/count').then((res) => setSyncAlertCount(res.data.data.count)).catch(() => {})
       api.get('/api/admin/claims/needs-review/count').then((res) => setClaimsCount(res.data.data.count)).catch(() => {})
+      api.get('/api/admin/fulfillment-queue/count').then((res) => setFulfillmentCount(res.data.data.count)).catch(() => {})
     }
     poll()
     const interval = setInterval(poll, 5 * 60 * 1000)
     return () => clearInterval(interval)
   }, [])
 
-  const badgeCount: Record<string, number> = { '/sync': syncAlertCount, '/claims': claimsCount }
+  const badgeCount: Record<string, number> = { '/sync': syncAlertCount, '/claims': claimsCount, '/fulfillment-queue': fulfillmentCount }
 
   const handleLogout = () => {
     logout()

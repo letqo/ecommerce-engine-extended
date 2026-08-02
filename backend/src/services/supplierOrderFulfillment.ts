@@ -5,6 +5,11 @@ import { AliExpressAdapter } from '../suppliers/AliExpressAdapter'
 import { checkBeforeFulfillment } from './supplierSync'
 import type { SupplierKey, SupplierOrder } from '@prisma/client'
 
+// 1m / 5m / 30m / 2h / 12h — after the 5th failed attempt we stop auto-retrying and
+// email the store owner instead; they can still retry by hand from the Fulfillment Queue.
+const RETRY_BACKOFF_MS = [1, 5, 30, 120, 720].map((min) => min * 60 * 1000)
+export const MAX_AUTO_RETRY_ATTEMPTS = RETRY_BACKOFF_MS.length
+
 type VariantForClassification = {
   cjVariantId?: string | null
   aliexpressSkuId?: string | null
@@ -129,7 +134,10 @@ export async function submitSupplierOrder(supplierOrderId: string, opts: { force
 
     const updated = await prisma.supplierOrder.update({
       where: { id: so.id },
-      data: { status: 'SUBMITTED', externalOrderId: result.supplierOrderId, externalStatus: result.status, submittedAt: new Date() },
+      data: {
+        status: 'SUBMITTED', externalOrderId: result.supplierOrderId, externalStatus: result.status, submittedAt: new Date(),
+        attempts: 0, nextRetryAt: null, lastError: null,
+      },
     })
     await prisma.orderTimeline.create({
       data: { orderId: so.orderId, message: `Submitted to ${so.supplierKey === 'CJ' ? 'CJ Dropshipping' : 'AliExpress'} — order ID: ${result.supplierOrderId}`, createdBy: 'system' },
@@ -137,10 +145,31 @@ export async function submitSupplierOrder(supplierOrderId: string, opts: { force
     await recomputeOrderFulfillment(so.orderId)
     return updated
   } catch (err: any) {
-    await prisma.supplierOrder.update({ where: { id: so.id }, data: { status: 'ERROR', lastError: err.message } })
-    await prisma.orderTimeline.create({
-      data: { orderId: so.orderId, message: `Submission to ${so.supplierKey === 'CJ' ? 'CJ' : 'AliExpress'} failed: ${err.message}`, createdBy: 'system' },
+    const attempts = so.attempts + 1
+    const exhausted = attempts >= MAX_AUTO_RETRY_ATTEMPTS
+    const nextRetryAt = exhausted ? null : new Date(Date.now() + RETRY_BACKOFF_MS[attempts - 1])
+
+    await prisma.supplierOrder.update({
+      where: { id: so.id },
+      data: { status: 'ERROR', lastError: err.message, attempts, nextRetryAt },
     })
+    await prisma.orderTimeline.create({
+      data: {
+        orderId: so.orderId,
+        message: exhausted
+          ? `Submission to ${so.supplierKey === 'CJ' ? 'CJ' : 'AliExpress'} failed (attempt ${attempts}/${MAX_AUTO_RETRY_ATTEMPTS}): ${err.message} — giving up automatic retries, needs manual attention.`
+          : `Submission to ${so.supplierKey === 'CJ' ? 'CJ' : 'AliExpress'} failed (attempt ${attempts}/${MAX_AUTO_RETRY_ATTEMPTS}): ${err.message} — retrying automatically.`,
+        createdBy: 'system',
+      },
+    })
+
+    if (exhausted && !so.failureNotifiedAt) {
+      await prisma.supplierOrder.update({ where: { id: so.id }, data: { failureNotifiedAt: new Date() } })
+      import('./email').then(({ sendFulfillmentFailureAlertEmail }) =>
+        sendFulfillmentFailureAlertEmail(so.id).catch((e: Error) => console.error('Fulfillment failure alert email error:', e.message))
+      )
+    }
+
     throw err
   }
 }

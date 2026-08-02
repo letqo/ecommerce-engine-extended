@@ -27,6 +27,7 @@ import SetupAssistant from '@/pages/setup-assistant/SetupAssistant'
 import StoreHealth from '@/pages/store-health/StoreHealth'
 import ClaimsList from '@/pages/claims/ClaimsList'
 import ClaimDetail from '@/pages/claims/ClaimDetail'
+import FulfillmentQueue from '@/pages/fulfillment/FulfillmentQueue'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { token, admin, fetchMe } = useAuthStore()
@@ -61,6 +62,7 @@ export default function App() {
           <Route path="products/:id" element={<ProductForm />} />
           <Route path="orders" element={<OrderList />} />
           <Route path="orders/:id" element={<OrderDetail />} />
+          <Route path="fulfillment-queue" element={<FulfillmentQueue />} />
           <Route path="claims" element={<ClaimsList />} />
           <Route path="claims/:id" element={<ClaimDetail />} />
           <Route path="customers" element={<CustomerList />} />

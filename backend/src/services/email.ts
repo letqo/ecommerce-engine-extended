@@ -465,3 +465,35 @@ export async function sendClaimAdminAlertEmail(orderId: string, claimId: string)
 
   await send(order.store.contactEmail, `Claim needs review — order #${order.orderNumber}`, layout(storeName, primaryColor, content), order.store)
 }
+
+// ─── Fulfillment failure alert ────────────────────────────────────────────────
+
+// Notifies the store owner when a CJ/AliExpress parcel has exhausted every automatic
+// retry attempt (see supplierOrderFulfillment.ts's backoff schedule) and needs a human
+// to look at it — retry by hand, switch it to manual fulfillment, or contact the supplier.
+export async function sendFulfillmentFailureAlertEmail(supplierOrderId: string) {
+  const so = await prisma.supplierOrder.findUnique({
+    where: { id: supplierOrderId },
+    include: {
+      order: { include: { store: { select: { name: true, primaryColor: true, contactEmail: true, emailFromName: true, emailFromAddress: true } } } },
+    },
+  })
+  if (!so?.order.store?.contactEmail) return
+
+  const storeName = so.order.store.name ?? env.EMAIL_FROM_NAME
+  const primaryColor = so.order.store.primaryColor ?? '#111827'
+  const adminUrl = `${env.ADMIN_URL}/fulfillment-queue`
+  const supplierLabel = so.supplierKey === 'CJ' ? 'CJ Dropshipping' : 'AliExpress'
+
+  const content = `
+    <h2 style="margin:0 0 6px;font-size:24px;font-weight:700;color:#111827;">A parcel needs your attention</h2>
+    <p style="margin:0 0 20px;color:#6b7280;font-size:15px;">
+      Order #${so.order.orderNumber}'s ${supplierLabel} parcel failed to submit after ${so.attempts} automatic attempts and has stopped retrying.
+    </p>
+    <p style="margin:0 0 20px;font-size:14px;color:#374151;">Last error: ${so.lastError ?? 'unknown'}</p>
+    <a href="${adminUrl}" style="display:inline-block;padding:12px 24px;background:${primaryColor};color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
+      Open Fulfillment Queue
+    </a>`
+
+  await send(so.order.store.contactEmail, `Action needed: parcel failed — order #${so.order.orderNumber}`, layout(storeName, primaryColor, content), so.order.store)
+}

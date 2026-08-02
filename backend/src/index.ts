@@ -60,6 +60,16 @@ async function main() {
       runTrackingSync().catch((e: Error) => console.error('Tracking sync job error:', e.message))
     )
   }, SIX_HOURS)
+
+  // Fulfillment retry — resubmits CJ/AliExpress parcels that failed, on a 1m/5m/30m/2h/12h
+  // backoff (see supplierOrderFulfillment.ts). Runs every minute; each run is a no-op unless
+  // a parcel's nextRetryAt has actually elapsed.
+  const ONE_MINUTE = 60 * 1000
+  setInterval(() => {
+    import('./services/fulfillmentRetry').then(({ runFulfillmentRetry }) =>
+      runFulfillmentRetry().catch((e: Error) => console.error('Fulfillment retry job error:', e.message))
+    )
+  }, ONE_MINUTE)
 }
 
 main()

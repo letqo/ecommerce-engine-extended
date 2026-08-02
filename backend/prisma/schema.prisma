@@ -469,6 +469,9 @@ model SupplierOrder {
   trackingCarrier String?
   trackingUrl     String?
   lastError       String?
+  attempts        Int                 @default(0)
+  nextRetryAt     DateTime?
+  failureNotifiedAt DateTime?
   submittedAt     DateTime?
   shippedAt       DateTime?
   items           OrderItem[]
@@ -478,6 +481,7 @@ model SupplierOrder {
   @@index([storeId, status])
   @@index([orderId])
   @@index([externalOrderId])
+  @@index([status, nextRetryAt])
 }
 
 enum SupplierKey {

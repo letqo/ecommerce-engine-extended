@@ -537,6 +537,19 @@ const TOOLS: Anthropic.Tool[] = [
     input_schema: { type: 'object', properties: { orderId: { type: 'string' } }, required: ['orderId'] },
   },
   {
+    name: 'list_pending_fulfillments',
+    description: 'List parcels across ALL orders that need fulfillment attention right now — AWAITING_MANUAL (no ordering API, needs tracking entered by hand) or ERROR (a CJ/AliExpress submission failed). This is the cross-order fulfillment queue, oldest first — use it when the owner asks "what needs shipping" or "what\'s stuck," rather than checking orders one at a time with get_order.',
+    input_schema: {
+      type: 'object',
+      properties: { status: { type: 'string', enum: ['AWAITING_MANUAL', 'ERROR'], description: 'Omit to get both.' } },
+    },
+  },
+  {
+    name: 'get_fulfillment_details',
+    description: 'Get full detail on one parcel (SupplierOrder) — items, shipping address, status, error history, retry attempts. Use this after list_pending_fulfillments to get everything needed to act on a specific parcel (e.g. before calling fulfill_order or fulfill_order_with_supplier).',
+    input_schema: { type: 'object', properties: { supplierOrderId: { type: 'string' } }, required: ['supplierOrderId'] },
+  },
+  {
     name: 'fulfill_order_with_supplier',
     description: 'Place a real, paid order with CJ or AliExpress to fulfill this order\'s items. This spends real money with the supplier. This only proposes the action — it requires the user to confirm.',
     input_schema: {
@@ -599,6 +612,7 @@ Guidelines:
 - Some tools only PROPOSE an action rather than apply it — anything that deletes a record, cancels an order, places a paid supplier order, or issues a refund. When you call one of these, tell the user clearly that nothing has happened yet and they need to click confirm in the chat — never say "I've deleted X" or "I've refunded X" for a staged action, only "I've prepared X, click confirm to make it real."
 - You have no ability to edit or delete customer records (email, name, phone, address) — this genuinely doesn't exist as a capability, not a restriction you're working around. If asked, say so plainly and suggest checking whether the admin panel has added this since.
 - You can translate products, categories, store content pages, and theme UI text into French, German, Italian, or Spanish (translate_product, translate_category, translate_store_content, translate_theme). English is the base language and lives in the main fields already — never pass "en" as a targetLocale, and never translate something that has no English content yet (write it in English first). Each translate_* call generates AND saves the translation for that one locale in one step — it doesn't touch other locales. If the user wants a full storefront translated, translate the store content pages, then loop through their categories and products, then the active theme.
+- When asked what needs shipping, what's stuck, or for a fulfillment status check, use list_pending_fulfillments (and get_fulfillment_details for one parcel) rather than paging through list_orders — it's the same cross-order queue the admin panel's Fulfillment Queue page shows. ERROR parcels for CJ/AliExpress retry automatically on a backoff schedule; only suggest fulfill_order_with_supplier for one that's stopped retrying (attempts exhausted) or ask the owner if they want to force it sooner.
 - Stay within the tools you have. If asked for something outside this scope (e.g. writing marketing emails, changing code), say so plainly and suggest they do it elsewhere in the admin panel.`
 }
 
@@ -1225,6 +1239,40 @@ export async function runTool(storeId: string, name: string, input: any): Promis
           },
         },
       }
+    }
+
+    case 'list_pending_fulfillments': {
+      const where: any = { storeId, status: input.status ? input.status : { in: ['AWAITING_MANUAL', 'ERROR'] } }
+      const parcels = await prisma.supplierOrder.findMany({
+        where,
+        include: {
+          items: { select: { title: true, quantity: true } },
+          order: { select: { orderNumber: true, guestEmail: true, customer: { select: { email: true } } } },
+        },
+        orderBy: { createdAt: 'asc' },
+        take: 50,
+      })
+      const list = parcels.map((so) => ({
+        supplierOrderId: so.id, orderNumber: so.order.orderNumber,
+        customerEmail: so.order.customer?.email ?? so.order.guestEmail,
+        supplierKey: so.supplierKey, supplierName: so.supplierName,
+        status: so.status, lastError: so.lastError, attempts: so.attempts,
+        items: so.items.map((i) => `${i.quantity}x ${i.title}`),
+        createdAt: so.createdAt,
+      }))
+      return { result: { parcels: list }, action: { tool: name, summary: `Listed ${list.length} parcel(s) needing fulfillment attention` } }
+    }
+
+    case 'get_fulfillment_details': {
+      const so = await prisma.supplierOrder.findFirst({
+        where: { id: input.supplierOrderId, storeId },
+        include: {
+          items: true,
+          order: { select: { orderNumber: true, shippingAddress: true, guestEmail: true, customer: { select: { email: true } } } },
+        },
+      })
+      if (!so) throw new Error('Parcel not found')
+      return { result: { parcel: so }, action: { tool: name, summary: `Looked up parcel for order #${so.order.orderNumber}` } }
     }
 
     case 'fulfill_order_with_supplier': {
