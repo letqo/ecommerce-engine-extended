@@ -1,0 +1,40 @@
+{
+  "name": "STILL",
+  "description": "Datasheet-meets-gallery theme for e-ink hardware: paper-grey ground, charcoal ink, one oxide-red accent, monospace for wordmark/nav/prices, hairline-ruled sections instead of a dense product grid.",
+  "vars": {
+    "--primary": "#201F1C",
+    "--primary-hover": "#A8391F",
+    "--primary-text": "#E7E6E1",
+    "--accent": "#A8391F",
+    "--hero-bg": "#E7E6E1",
+    "--hero-text": "#201F1C",
+    "--hero-sub": "#6B6960",
+    "--footer-bg": "#E7E6E1",
+    "--footer-text": "#6B6960",
+    "--font-sans": "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif",
+    "--radius-btn": "2px",
+    "--radius-card": "4px"
+  },
+  "css": ":root { --paper: #E7E6E1; --paper-panel: #DBDAD2; --paper-panel-2: #D1CFC5; --ink-soft: #6B6960; --line: #C7C5BB; --mono: ui-monospace, 'SF Mono', 'Cascadia Mono', Consolas, 'Roboto Mono', monospace; }\n\nbody { background: var(--paper); }\n\n/* Header — wordmark + nav in mono, hairline rule instead of a shadowed bar */\n[data-theme-section=\"header\"] { background: var(--paper); border-bottom: 1px solid var(--line); box-shadow: none; }\n[data-theme-section=\"header\"] .theme-header-logo { font-family: var(--mono); font-weight: 600; letter-spacing: 0.18em; color: var(--primary); }\n[data-theme-section=\"header\"] .theme-header-nav a { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.02em; color: var(--primary); }\n[data-theme-section=\"header\"] .theme-header-nav a:hover { color: var(--accent); }\n[data-theme-section=\"header\"] .theme-header-actions { font-family: var(--mono); font-size: 0.78rem; color: var(--ink-soft); }\n[data-theme-section=\"header\"] .theme-header-cart-badge { background: var(--accent); border-radius: 2px; }\n\n/* Hero — flat panel, no gradient banner; showcase area reads like a device bezel */\n[data-theme-section=\"hero\"] { border-bottom: 1px solid var(--line); }\n[data-theme-section=\"hero\"] .theme-hero-title { font-weight: 600; letter-spacing: -0.01em; }\n[data-theme-section=\"hero\"] .theme-hero-cta { background: var(--primary); color: var(--primary-text); font-family: var(--mono); font-size: 0.78rem; letter-spacing: 0.06em; text-transform: uppercase; border-radius: var(--radius-btn); }\n[data-theme-section=\"hero\"] .theme-hero-cta:hover { background: var(--primary-hover); }\n[data-theme-section=\"hero\"][data-variant=\"showcase\"] .theme-hero-showcase { background: linear-gradient(155deg, var(--paper-panel-2), var(--paper-panel)); border: 1px solid var(--line); border-radius: 6px; background-image: repeating-linear-gradient(0deg, rgba(0,0,0,0.03) 0px, rgba(0,0,0,0.03) 1px, transparent 1px, transparent 3px); }\n\n/* Brand statement — quiet, centered, mono eyebrow */\n[data-theme-section=\"home-brand\"] { background: var(--paper); border-bottom: 1px solid var(--line); text-align: center; padding: 4rem 1rem; }\n[data-theme-section=\"home-brand\"] p { font-size: clamp(1.15rem, 2vw, 1.5rem); font-weight: 500; line-height: 1.45; max-width: 42rem; margin: 0 auto; color: var(--primary); }\n\n/* Trust badges repurposed as a spec strip — hairline-divided data row instead of icon cards */\n[data-theme-section=\"home-trust\"] { background: var(--paper); border-bottom: 1px solid var(--line); font-family: var(--mono); }\n[data-theme-section=\"home-trust\"] * { color: var(--primary); }\n\n/* Product cards — small radius, mono price, no shadow */\n[data-theme-section=\"product-card\"] .theme-card-image { border-radius: var(--radius-card); background: var(--paper-panel); box-shadow: none; }\n[data-theme-section=\"product-card\"] .theme-card-title { font-weight: 500; color: var(--primary); }\n[data-theme-section=\"product-card\"]:hover .theme-card-title { color: var(--accent); }\n[data-theme-section=\"product-card\"] .theme-card-price { font-family: var(--mono); }\n\n/* Footer — minimal, same paper ground, no dark block */\n[data-theme-section=\"footer\"] { background: var(--paper); border-top: 1px solid var(--line); }\n[data-theme-section=\"footer\"] .theme-footer-copyright, [data-theme-section=\"footer\"] a { font-family: var(--mono); font-size: 0.75rem; }\n[data-theme-section=\"footer\"] a:hover { color: var(--accent); }\n",
+  "sections": {
+    "header": { "variant": "two-tier" },
+    "footer": { "variant": "minimal" },
+    "home": [
+      { "type": "hero", "variant": "showcase" },
+      { "type": "brand-statement" },
+      { "type": "trust-badges", "variant": "default", "items": [
+        { "icon": "refresh", "label": "16-level grey e-ink", "description": "True paper contrast, no backlight" },
+        { "icon": "clock", "label": "Weeks per charge", "description": "One battery, one season" },
+        { "icon": "shield", "label": "Matte, glare-free", "description": "Reads like paper in any light" },
+        { "icon": "award", "label": "Fully reflective", "description": "No blue light, no glow at night" }
+      ]},
+      { "type": "featured-products", "variant": "grid-2", "heading": "Current collection" },
+      { "type": "newsletter", "variant": "compact" }
+    ],
+    "productsGrid": "grid-2",
+    "productDetail": "gallery-sticky",
+    "productCard": "default",
+    "cartLayout": "sidebar",
+    "checkoutLayout": "single-column"
+  }
+}
