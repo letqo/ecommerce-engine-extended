@@ -1,6 +1,7 @@
 import { prisma } from '../config/database'
 import { CJAdapter } from '../suppliers/CJAdapter'
 import { AliExpressAdapter } from '../suppliers/AliExpressAdapter'
+import { recomputeOrderFulfillment } from './supplierOrderFulfillment'
 
 interface TrackingSyncResult {
   checked: number
@@ -11,10 +12,10 @@ interface TrackingSyncResult {
 export async function runTrackingSync(): Promise<TrackingSyncResult> {
   const result: TrackingSyncResult = { checked: 0, updated: 0, errors: 0 }
 
-  // CJ tracking is handled by webhooks — only poll as fallback for orders stuck > 24h
+  // CJ tracking is handled by webhooks — only poll as fallback for parcels stuck > 24h
   await syncCJTrackingFallback(result)
 
-  // AliExpress — batch query all pending orders at once
+  // AliExpress — batch query all pending parcels at once
   await syncAliExpressBatch(result)
 
   if (result.checked > 0) {
@@ -27,84 +28,80 @@ export async function runTrackingSync(): Promise<TrackingSyncResult> {
 async function syncCJTrackingFallback(result: TrackingSyncResult) {
   const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000)
 
-  const orders = await prisma.order.findMany({
+  const supplierOrders = await prisma.supplierOrder.findMany({
     where: {
-      cjOrderId: { not: null },
+      supplierKey: 'CJ',
+      status: 'SUBMITTED',
       trackingNumber: null,
-      status: { in: ['CONFIRMED', 'PROCESSING'] },
-      paymentStatus: 'PAID',
       updatedAt: { lt: oneDayAgo },
     },
-    select: { id: true, orderNumber: true, cjOrderId: true },
+    select: { id: true, externalOrderId: true, order: { select: { orderNumber: true } } },
     take: 20,
   })
 
-  for (const order of orders) {
+  for (const so of supplierOrders) {
     result.checked++
     try {
       const cj = new CJAdapter()
-      const info = await cj.getOrderStatus(order.cjOrderId!)
+      const info = await cj.getOrderStatus(so.externalOrderId!)
       if (!info.trackingNumber) continue
 
-      await updateOrderWithTracking(order.id, {
+      await updateSupplierOrderWithTracking(so.id, {
         trackingNumber: info.trackingNumber,
         trackingUrl: info.trackingUrl,
         carrier: info.carrier,
-        supplierStatus: info.status,
-        supplierField: 'cjOrderStatus',
+        externalStatus: info.status,
       })
       result.updated++
     } catch (err: any) {
-      console.error(`[TrackingSync] CJ fallback failed for #${order.orderNumber}:`, err.message)
+      console.error(`[TrackingSync] CJ fallback failed for #${so.order.orderNumber}:`, err.message)
       result.errors++
     }
   }
 }
 
 async function syncAliExpressBatch(result: TrackingSyncResult) {
-  const orders = await prisma.order.findMany({
+  const supplierOrders = await prisma.supplierOrder.findMany({
     where: {
-      aliexpressOrderId: { not: null },
+      supplierKey: 'ALIEXPRESS',
+      status: 'SUBMITTED',
       trackingNumber: null,
-      status: { in: ['CONFIRMED', 'PROCESSING'] },
-      paymentStatus: 'PAID',
     },
-    select: { id: true, orderNumber: true, aliexpressOrderId: true, storeId: true },
+    select: { id: true, externalOrderId: true, storeId: true, order: { select: { orderNumber: true } } },
   })
 
-  if (orders.length === 0) return
+  if (supplierOrders.length === 0) return
 
   // Group by store for correct auth tokens
-  const byStore = new Map<string, typeof orders>()
-  for (const order of orders) {
-    const key = order.storeId ?? '__default'
+  const byStore = new Map<string, typeof supplierOrders>()
+  for (const so of supplierOrders) {
+    const key = so.storeId ?? '__default'
     if (!byStore.has(key)) byStore.set(key, [])
-    byStore.get(key)!.push(order)
+    byStore.get(key)!.push(so)
   }
 
-  for (const [storeId, storeOrders] of byStore) {
+  for (const [storeId, storeSupplierOrders] of byStore) {
     try {
       const ae = new AliExpressAdapter()
       if (storeId !== '__default') ae.withStore(storeId)
 
-      // Fetch each order's status — AliExpress doesn't have a true batch endpoint
-      // for DS orders, but we rate-limit and only process orders without tracking
-      for (const order of storeOrders) {
+      // Fetch each parcel's status — AliExpress doesn't have a true batch endpoint
+      // for DS orders, but we rate-limit and only process parcels without tracking
+      for (const so of storeSupplierOrders) {
         result.checked++
         try {
-          const info = await ae.getOrderStatus(order.aliexpressOrderId!)
+          const info = await ae.getOrderStatus(so.externalOrderId!)
           if (!info.trackingNumber) continue
 
-          await updateOrderWithTracking(order.id, {
+          await updateSupplierOrderWithTracking(so.id, {
             trackingNumber: info.trackingNumber,
             trackingUrl: info.trackingUrl,
             carrier: info.carrier,
-            supplierStatus: info.status,
-            supplierField: 'aliexpressOrderStatus',
+            externalStatus: info.status,
           })
           result.updated++
         } catch (err: any) {
-          console.error(`[TrackingSync] AliExpress failed for #${order.orderNumber}:`, err.message)
+          console.error(`[TrackingSync] AliExpress failed for #${so.order.orderNumber}:`, err.message)
           result.errors++
         }
       }
@@ -115,33 +112,38 @@ async function syncAliExpressBatch(result: TrackingSyncResult) {
   }
 }
 
-async function updateOrderWithTracking(orderId: string, data: {
+async function updateSupplierOrderWithTracking(supplierOrderId: string, data: {
   trackingNumber: string
   trackingUrl?: string
   carrier?: string
-  supplierStatus: string
-  supplierField: 'cjOrderStatus' | 'aliexpressOrderStatus'
+  externalStatus: string
 }) {
-  await prisma.order.update({
-    where: { id: orderId },
+  const so = await prisma.supplierOrder.update({
+    where: { id: supplierOrderId },
     data: {
+      status: 'SHIPPED',
       trackingNumber: data.trackingNumber,
       trackingUrl: data.trackingUrl ?? null,
-      [data.supplierField]: data.supplierStatus,
-      status: 'SHIPPED',
-      fulfillmentStatus: 'FULFILLED',
+      trackingCarrier: data.carrier,
+      externalStatus: data.externalStatus,
       shippedAt: new Date(),
-      timeline: {
-        create: {
-          message: `Shipped via ${data.carrier ?? 'carrier'} — tracking: ${data.trackingNumber}`,
-          createdBy: 'system',
-        },
-      },
     },
   })
 
+  await prisma.orderTimeline.create({
+    data: {
+      orderId: so.orderId,
+      message: `Parcel (${so.supplierKey}) shipped via ${data.carrier ?? 'carrier'} — tracking: ${data.trackingNumber}`,
+      createdBy: 'system',
+    },
+  })
+
+  await recomputeOrderFulfillment(so.orderId)
+
+  const items = await prisma.orderItem.findMany({ where: { supplierOrderId: so.id }, select: { id: true } })
+  const itemIds = items.map((i) => i.id)
   import('./email').then(({ sendShippingEmail, sendReviewInvitationEmail }) => {
-    sendShippingEmail(orderId).catch(() => {})
-    sendReviewInvitationEmail(orderId).catch(() => {})
+    sendShippingEmail(so.id).catch(() => {})
+    sendReviewInvitationEmail(so.orderId, itemIds).catch(() => {})
   })
 }

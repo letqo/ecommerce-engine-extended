@@ -7,6 +7,20 @@ import { formatPrice } from '@/lib/utils'
 import { Link } from '@/i18n/navigation'
 import { Package, Truck, CheckCircle2, Clock, Search, ExternalLink, TriangleAlert } from 'lucide-react'
 
+type OrderItem = { title: string; variantTitle: string; quantity: number; price: number; imageUrl: string | null }
+
+interface SupplierParcel {
+  id: string
+  supplierKey: 'CJ' | 'ALIEXPRESS' | 'MANUAL'
+  supplierName: string | null
+  status: 'AWAITING_MANUAL' | 'SUBMITTED' | 'SHIPPED' | 'ERROR' | 'CANCELLED'
+  trackingNumber: string | null
+  trackingUrl: string | null
+  trackingCarrier: string | null
+  shippedAt: string | null
+  items: OrderItem[]
+}
+
 interface OrderData {
   id: string
   orderNumber: number
@@ -15,10 +29,10 @@ interface OrderData {
   fulfillmentStatus: string
   total: number
   currency: string
-  trackingNumber: string | null
-  trackingUrl: string | null
   shippingAddress: any
-  items: { title: string; variantTitle: string; quantity: number; price: number; imageUrl: string | null }[]
+  items: OrderItem[]
+  // Empty for a brief window right after checkout, before the async supplier split runs.
+  supplierOrders: SupplierParcel[]
   createdAt: string
 }
 
@@ -137,68 +151,120 @@ export default function TrackOrderPage() {
             )}
           </div>
 
-          {/* Tracking info */}
-          {order.trackingNumber && (
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-5">
-              <div className="flex items-start gap-3">
-                <Truck size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-semibold text-blue-900 text-sm">{t('trackingLabel')}</p>
-                  <p className="font-mono text-blue-800 text-lg mt-1">{order.trackingNumber}</p>
-                  {order.trackingUrl && (
-                    <a
-                      href={order.trackingUrl}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium mt-2"
-                    >
-                      {t('trackPackage')} <ExternalLink size={14} />
-                    </a>
+          {order.supplierOrders.length > 1 && order.status !== 'CANCELLED' && (
+            <p className="text-sm text-gray-500 -mt-2">{t('multipleParcelsNote')}</p>
+          )}
+
+          {/* One block per parcel — an order can ship separately from more than one supplier */}
+          {order.supplierOrders.length > 0 ? (
+            <div className="space-y-4">
+              {order.supplierOrders.map((parcel) => (
+                <div key={parcel.id}>
+                  {order.supplierOrders.length > 1 && (
+                    <h2 className="font-semibold mb-2 text-sm text-gray-700">
+                      {parcel.supplierKey === 'CJ' ? 'CJ Dropshipping' : parcel.supplierKey === 'ALIEXPRESS' ? 'AliExpress' : parcel.supplierName || t('items')}
+                    </h2>
                   )}
-                </div>
-              </div>
-            </div>
-          )}
 
-          {!order.trackingNumber && order.status !== 'CANCELLED' && (
-            <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-              <div className="flex items-start gap-3">
-                <Clock size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="font-semibold text-amber-900 text-sm">{t('noTrackingYet')}</p>
-                  <p className="text-amber-700 text-sm mt-1">{t('noTrackingMessage')}</p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Items */}
-          <div>
-            <h2 className="font-semibold mb-3">{t('items')}</h2>
-            <div className="space-y-3">
-              {order.items.map((item, i) => (
-                <div key={i} className="flex items-center gap-4 p-3 border border-gray-200 rounded-xl">
-                  <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
-                    {item.imageUrl ? (
-                      <Image src={item.imageUrl} alt={item.title} width={56} height={56} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-gray-300">
-                        <Package size={20} />
+                  {parcel.status === 'SHIPPED' && parcel.trackingNumber ? (
+                    <div className="bg-blue-50 border border-blue-200 rounded-xl p-5 mb-3">
+                      <div className="flex items-start gap-3">
+                        <Truck size={20} className="text-blue-600 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-semibold text-blue-900 text-sm">{t('trackingLabel')}</p>
+                          <p className="font-mono text-blue-800 text-lg mt-1">{parcel.trackingNumber}</p>
+                          {parcel.trackingUrl && (
+                            <a
+                              href={parcel.trackingUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-800 font-medium mt-2"
+                            >
+                              {t('trackPackage')} <ExternalLink size={14} />
+                            </a>
+                          )}
+                        </div>
                       </div>
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-sm truncate">{item.title}</p>
-                    {item.variantTitle && <p className="text-xs text-gray-500">{item.variantTitle}</p>}
-                  </div>
-                  <div className="text-right text-sm">
-                    <p className="font-medium">{formatPrice(item.price, order.currency)}</p>
-                    <p className="text-gray-400">×{item.quantity}</p>
+                    </div>
+                  ) : order.status !== 'CANCELLED' ? (
+                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-5 mb-3">
+                      <div className="flex items-start gap-3">
+                        <Clock size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                        <div>
+                          <p className="font-semibold text-amber-900 text-sm">{t('noTrackingYet')}</p>
+                          <p className="text-amber-700 text-sm mt-1">{t('noTrackingMessage')}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
+                  <div className="space-y-3">
+                    {parcel.items.map((item, i) => (
+                      <div key={i} className="flex items-center gap-4 p-3 border border-gray-200 rounded-xl">
+                        <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
+                          {item.imageUrl ? (
+                            <Image src={item.imageUrl} alt={item.title} width={56} height={56} className="w-full h-full object-cover" />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center text-gray-300">
+                              <Package size={20} />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{item.title}</p>
+                          {item.variantTitle && <p className="text-xs text-gray-500">{item.variantTitle}</p>}
+                        </div>
+                        <div className="text-right text-sm">
+                          <p className="font-medium">{formatPrice(item.price, order.currency)}</p>
+                          <p className="text-gray-400">×{item.quantity}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ))}
             </div>
-          </div>
+          ) : (
+            <>
+              {order.status !== 'CANCELLED' && (
+                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
+                  <div className="flex items-start gap-3">
+                    <Clock size={20} className="text-amber-600 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <p className="font-semibold text-amber-900 text-sm">{t('noTrackingYet')}</p>
+                      <p className="text-amber-700 text-sm mt-1">{t('noTrackingMessage')}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <div>
+                <h2 className="font-semibold mb-3">{t('items')}</h2>
+                <div className="space-y-3">
+                  {order.items.map((item, i) => (
+                    <div key={i} className="flex items-center gap-4 p-3 border border-gray-200 rounded-xl">
+                      <div className="w-14 h-14 flex-shrink-0 rounded-lg overflow-hidden bg-gray-100">
+                        {item.imageUrl ? (
+                          <Image src={item.imageUrl} alt={item.title} width={56} height={56} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-gray-300">
+                            <Package size={20} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">{item.title}</p>
+                        {item.variantTitle && <p className="text-xs text-gray-500">{item.variantTitle}</p>}
+                      </div>
+                      <div className="text-right text-sm">
+                        <p className="font-medium">{formatPrice(item.price, order.currency)}</p>
+                        <p className="text-gray-400">×{item.quantity}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* Report a problem */}
           {(order.status === 'SHIPPED' || order.status === 'DELIVERED') && (

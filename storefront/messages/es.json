@@ -116,7 +116,8 @@
     "applying": "Aplicando...",
     "removeCoupon": "Eliminar",
     "deliveryEstimate": "Entrega estimada: {range}",
-    "deliveryEstimateCalculating": "Calculando tiempo de entrega…"
+    "deliveryEstimateCalculating": "Calculando tiempo de entrega…",
+    "multipleParcelsNote": "Este pedido se enviará en más de un paquete."
   },
   "confirmation": {
     "title": "¡Gracias!",
@@ -143,7 +144,8 @@
     "trackPackage": "Rastrear paquete",
     "noTrackingYet": "Seguimiento aún no disponible",
     "noTrackingMessage": "Tu pedido está siendo preparado. La información de seguimiento aparecerá aquí cuando se envíe.",
-    "items": "Artículos del pedido"
+    "items": "Artículos del pedido",
+    "multipleParcelsNote": "Este pedido se envía en más de un paquete — cada uno se rastrea por separado a continuación."
   },
   "account": {
     "title": "Mi cuenta",

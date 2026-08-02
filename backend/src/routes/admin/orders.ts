@@ -1,12 +1,9 @@
 import { Router, Response, NextFunction } from 'express'
-import crypto from 'crypto'
 import { prisma } from '../../config/database'
 import { requireAdmin, AdminRequest } from '../../middleware/auth'
 import { createError } from '../../middleware/errorHandler'
 import { stripe } from '../../config/stripe'
-import { getAdapter } from '../../suppliers/registry'
-import { AliExpressAdapter } from '../../suppliers/AliExpressAdapter'
-import { checkBeforeFulfillment } from '../../services/supplierSync'
+import { submitSupplierOrder, fulfillSupplierOrderManually, splitOrderIntoSupplierOrders } from '../../services/supplierOrderFulfillment'
 import { z } from 'zod'
 
 const router = Router()
@@ -58,7 +55,7 @@ router.get('/:id', async (req: AdminRequest, res: Response, next: NextFunction) 
       where: { id: req.params.id, storeId: req.storeId },
       include: {
         customer: true,
-        items: { include: { variant: { include: { product: true } } } },
+        supplierOrders: { include: { items: { include: { variant: { include: { product: true } } } } }, orderBy: { createdAt: 'asc' } },
         timeline: { orderBy: { createdAt: 'asc' } },
         refunds: true,
         discount: true,
@@ -69,45 +66,6 @@ router.get('/:id', async (req: AdminRequest, res: Response, next: NextFunction) 
   } catch (err) { next(err) }
 })
 
-// Shared by the REST route and the setup-assistant tool dispatcher.
-export async function fulfillOrder(storeId: string | undefined, orderId: string, trackingNumber: string, trackingUrl: string | undefined, createdBy: string) {
-  const existing = await prisma.order.findFirst({ where: { id: orderId, storeId } })
-  if (!existing) throw createError('Order not found', 404, 'NOT_FOUND')
-
-  const orderItems = await prisma.orderItem.findMany({
-    where: { orderId, reviewToken: null },
-    select: { id: true },
-  })
-
-  await Promise.all(
-    orderItems.map((item) =>
-      prisma.orderItem.update({
-        where: { id: item.id },
-        data: { reviewToken: crypto.randomBytes(32).toString('hex') },
-      })
-    )
-  )
-
-  const order = await prisma.order.update({
-    where: { id: orderId },
-    data: {
-      trackingNumber,
-      trackingUrl,
-      status: 'SHIPPED',
-      fulfillmentStatus: 'FULFILLED',
-      shippedAt: existing.shippedAt ?? new Date(),
-      timeline: { create: { message: `Tracking number added: ${trackingNumber}`, createdBy } },
-    },
-  })
-
-  import('../../services/email').then(({ sendShippingEmail, sendReviewInvitationEmail }) => {
-    sendShippingEmail(order.id).catch((e: Error) => console.error('Shipping email error:', e.message))
-    sendReviewInvitationEmail(order.id).catch((e: Error) => console.error('Review invitation email error:', e.message))
-  })
-
-  return order
-}
-
 export async function addOrderNote(storeId: string | undefined, orderId: string, message: string, createdBy: string) {
   const existing = await prisma.order.findFirst({ where: { id: orderId, storeId } })
   if (!existing) throw createError('Order not found', 404, 'NOT_FOUND')
@@ -117,16 +75,20 @@ export async function addOrderNote(storeId: string | undefined, orderId: string,
   })
 }
 
-// PATCH /api/admin/orders/:id/fulfill
-router.patch('/:id/fulfill', async (req: AdminRequest, res: Response, next: NextFunction) => {
+// PATCH /api/admin/orders/supplier-orders/:id/fulfill — enter tracking for one parcel
+router.patch('/supplier-orders/:id/fulfill', async (req: AdminRequest, res: Response, next: NextFunction) => {
   try {
-    const { trackingNumber, trackingUrl } = z.object({
+    const { trackingNumber, trackingUrl, carrier } = z.object({
       trackingNumber: z.string().min(1),
       trackingUrl: z.string().optional(),
+      carrier: z.string().optional(),
     }).parse(req.body)
 
-    const order = await fulfillOrder(req.storeId, req.params.id, trackingNumber, trackingUrl, req.admin!.email)
-    res.json({ success: true, data: order })
+    const so = await prisma.supplierOrder.findFirst({ where: { id: req.params.id, storeId: req.storeId } })
+    if (!so) throw createError('Parcel not found', 404, 'NOT_FOUND')
+
+    const updated = await fulfillSupplierOrderManually(so.id, { trackingNumber, trackingUrl, carrier }, req.admin!.email)
+    res.json({ success: true, data: updated })
   } catch (err) { next(err) }
 })
 
@@ -159,138 +121,45 @@ router.patch('/:id/cancel', async (req: AdminRequest, res: Response, next: NextF
   } catch (err) { next(err) }
 })
 
-// POST /api/admin/orders/:id/fulfill-cj
+// POST /api/admin/orders/:id/fulfill-cj — submits (or retries) this order's CJ parcel
 router.post('/:id/fulfill-cj', async (req: AdminRequest, res: Response, next: NextFunction) => {
   try {
-    const order = await prisma.order.findFirst({
-      where: { id: req.params.id, storeId: req.storeId },
-      include: { items: { include: { variant: true } } },
-    })
+    const order = await prisma.order.findFirst({ where: { id: req.params.id, storeId: req.storeId } })
     if (!order) throw createError('Order not found', 404, 'NOT_FOUND')
-    if (order.cjOrderId) throw createError('Already submitted to CJ (order ID: ' + order.cjOrderId + ')', 400, 'ALREADY_FULFILLED')
 
-    const cjItems = order.items.filter((item) => item.variant?.cjVariantId)
-    if (cjItems.length === 0) throw createError('No CJ products found in this order. Only products imported from CJ can be fulfilled this way.', 400, 'NO_CJ_PRODUCTS')
+    const supplierOrders = await splitOrderIntoSupplierOrders(order.id)
+    const so = supplierOrders.find((s) => s.supplierKey === 'CJ')
+    if (!so) throw createError('No CJ products found in this order. Only products imported from CJ can be fulfilled this way.', 400, 'NO_CJ_PRODUCTS')
+    if (so.status === 'SUBMITTED' || so.status === 'SHIPPED') throw createError('Already submitted to CJ (order ID: ' + so.externalOrderId + ')', 400, 'ALREADY_FULFILLED')
 
-    const preflight = await checkBeforeFulfillment(order.id)
-    if (!preflight.ok && !req.body.force) {
-      return res.status(409).json({ success: false, code: 'SYNC_WARNING', warnings: preflight.warnings })
+    try {
+      const updated = await submitSupplierOrder(so.id, { force: req.body.force })
+      res.json({ success: true, data: { cjOrderId: updated.externalOrderId } })
+    } catch (err: any) {
+      if (err.code === 'SYNC_WARNING') return res.status(409).json({ success: false, code: 'SYNC_WARNING', warnings: err.warnings })
+      throw err
     }
-
-    const addr = order.shippingAddress as any
-    const cj = getAdapter('cj')
-
-    const result = await cj.placeOrder({
-      ourOrderId: String(order.orderNumber),
-      shippingAddress: {
-        firstName: addr.firstName ?? '',
-        lastName: addr.lastName ?? '',
-        address1: addr.address1 ?? '',
-        address2: addr.address2 ?? '',
-        city: addr.city ?? '',
-        province: addr.province ?? '',
-        postalCode: addr.postalCode ?? '',
-        countryCode: addr.country ?? '',
-        phone: addr.phone ?? '',
-      },
-      items: cjItems.map((item) => ({
-        variantSupplierId: item.variant!.cjVariantId!,
-        quantity: item.quantity,
-      })),
-    })
-
-    // If order also has AliExpress items not yet submitted, use PARTIALLY_FULFILLED
-    const hasUnfulfilledAE = order.items.some(
-      (item) => (item.variant?.aliexpressSkuId || item.variant?.aliexpressSkuAttr) && !order.aliexpressOrderId
-    )
-    const fulfillmentStatus = hasUnfulfilledAE ? 'PARTIALLY_FULFILLED' : 'FULFILLED'
-
-    await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        cjOrderId: result.supplierOrderId,
-        cjOrderStatus: result.status,
-        status: 'PROCESSING',
-        fulfillmentStatus,
-        timeline: {
-          create: {
-            message: `Submitted to CJ Dropshipping — CJ order ID: ${result.supplierOrderId}`,
-            createdBy: req.admin!.email,
-          },
-        },
-      },
-    })
-
-    res.json({ success: true, data: { cjOrderId: result.supplierOrderId } })
   } catch (err) { next(err) }
 })
 
-// POST /api/admin/orders/:id/fulfill-aliexpress
+// POST /api/admin/orders/:id/fulfill-aliexpress — submits (or retries) this order's AliExpress parcel
 router.post('/:id/fulfill-aliexpress', async (req: AdminRequest, res: Response, next: NextFunction) => {
   try {
-    const order = await prisma.order.findFirst({
-      where: { id: req.params.id, storeId: req.storeId },
-      include: { items: { include: { variant: { include: { product: true } } } } },
-    })
+    const order = await prisma.order.findFirst({ where: { id: req.params.id, storeId: req.storeId } })
     if (!order) throw createError('Order not found', 404, 'NOT_FOUND')
-    if (order.aliexpressOrderId) throw createError('Already submitted to AliExpress (order ID: ' + order.aliexpressOrderId + ')', 400, 'ALREADY_FULFILLED')
 
-    const aeItems = order.items.filter(
-      (item) => item.variant?.product?.aliexpressProductId && (item.variant?.aliexpressSkuId || item.variant?.aliexpressSkuAttr)
-    )
-    if (aeItems.length === 0) throw createError('No AliExpress products found in this order. Only products imported from AliExpress can be fulfilled this way.', 400, 'NO_ALIEXPRESS_PRODUCTS')
+    const supplierOrders = await splitOrderIntoSupplierOrders(order.id)
+    const so = supplierOrders.find((s) => s.supplierKey === 'ALIEXPRESS')
+    if (!so) throw createError('No AliExpress products found in this order. Only products imported from AliExpress can be fulfilled this way.', 400, 'NO_ALIEXPRESS_PRODUCTS')
+    if (so.status === 'SUBMITTED' || so.status === 'SHIPPED') throw createError('Already submitted to AliExpress (order ID: ' + so.externalOrderId + ')', 400, 'ALREADY_FULFILLED')
 
-    const preflight = await checkBeforeFulfillment(order.id)
-    if (!preflight.ok && !req.body.force) {
-      return res.status(409).json({ success: false, code: 'SYNC_WARNING', warnings: preflight.warnings })
+    try {
+      const updated = await submitSupplierOrder(so.id, { force: req.body.force })
+      res.json({ success: true, data: { aliexpressOrderId: updated.externalOrderId } })
+    } catch (err: any) {
+      if (err.code === 'SYNC_WARNING') return res.status(409).json({ success: false, code: 'SYNC_WARNING', warnings: err.warnings })
+      throw err
     }
-
-    const addr = order.shippingAddress as any
-    const ae = new AliExpressAdapter()
-    if (req.storeId) ae.withStore(req.storeId)
-
-    const result = await ae.placeOrder({
-      ourOrderId: String(order.orderNumber),
-      shippingAddress: {
-        firstName: addr.firstName ?? '',
-        lastName: addr.lastName ?? '',
-        address1: addr.address1 ?? '',
-        address2: addr.address2 ?? '',
-        city: addr.city ?? '',
-        province: addr.province ?? '',
-        postalCode: addr.postalCode ?? '',
-        countryCode: addr.country ?? '',
-        phone: addr.phone ?? '',
-      },
-      items: aeItems.map((item) => ({
-        variantSupplierId: `${item.variant!.product!.aliexpressProductId}:::${item.variant!.aliexpressSkuAttr ?? ''}`,
-        quantity: item.quantity,
-      })),
-    })
-
-    // If order also has CJ items not yet submitted, use PARTIALLY_FULFILLED
-    const hasUnfulfilledCJ = order.items.some(
-      (item) => item.variant?.cjVariantId && !order.cjOrderId
-    )
-    const fulfillmentStatus = hasUnfulfilledCJ ? 'PARTIALLY_FULFILLED' : 'FULFILLED'
-
-    await prisma.order.update({
-      where: { id: order.id },
-      data: {
-        aliexpressOrderId: result.supplierOrderId,
-        aliexpressOrderStatus: result.status,
-        status: 'PROCESSING',
-        fulfillmentStatus,
-        timeline: {
-          create: {
-            message: `Submitted to AliExpress — order ID: ${result.supplierOrderId}`,
-            createdBy: req.admin!.email,
-          },
-        },
-      },
-    })
-
-    res.json({ success: true, data: { aliexpressOrderId: result.supplierOrderId } })
   } catch (err) { next(err) }
 })
 

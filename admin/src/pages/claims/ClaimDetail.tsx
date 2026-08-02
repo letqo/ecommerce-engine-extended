@@ -97,8 +97,9 @@ export default function ClaimDetail() {
 
   if (loading || !claim) return <div className="p-6"><Skeleton className="h-40 w-full" /></div>
 
-  const supplierOrderId = claim.order.cjOrderId || claim.order.aliexpressOrderId
-  const supplierName = claim.order.cjOrderId ? 'CJ Dropshipping' : claim.order.aliexpressOrderId ? 'AliExpress' : null
+  const submittedSupplierOrder = claim.order.supplierOrders?.find((so: any) => so.supplierKey !== 'MANUAL' && so.externalOrderId)
+  const supplierOrderId = submittedSupplierOrder?.externalOrderId ?? null
+  const supplierName = submittedSupplierOrder ? (submittedSupplierOrder.supplierKey === 'CJ' ? 'CJ Dropshipping' : 'AliExpress') : null
   const wholesaleCosts = claim.order.items
     .map((item: any) => item.variant?.costPerItem)
     .filter((c: any) => typeof c === 'number')

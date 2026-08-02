@@ -116,7 +116,8 @@
     "applying": "Wird angewendet...",
     "removeCoupon": "Entfernen",
     "deliveryEstimate": "Voraussichtliche Lieferung: {range}",
-    "deliveryEstimateCalculating": "Lieferzeit wird berechnet…"
+    "deliveryEstimateCalculating": "Lieferzeit wird berechnet…",
+    "multipleParcelsNote": "Diese Bestellung wird in mehr als einem Paket versendet."
   },
   "confirmation": {
     "title": "Vielen Dank!",
@@ -143,7 +144,8 @@
     "trackPackage": "Paket verfolgen",
     "noTrackingYet": "Sendungsverfolgung noch nicht verfügbar",
     "noTrackingMessage": "Ihre Bestellung wird vorbereitet. Tracking-Infos erscheinen hier, sobald Ihr Paket versendet wird.",
-    "items": "Bestellte Artikel"
+    "items": "Bestellte Artikel",
+    "multipleParcelsNote": "Diese Bestellung wird in mehr als einem Paket versendet — jedes wird unten separat verfolgt."
   },
   "account": {
     "title": "Mein Konto",

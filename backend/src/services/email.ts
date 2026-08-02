@@ -173,15 +173,24 @@ export async function sendOrderConfirmationEmail(orderId: string) {
 
 // ─── Shipping notification ─────────────────────────────────────────────────────
 
-export async function sendShippingEmail(orderId: string) {
-  const order = await prisma.order.findUnique({
-    where: { id: orderId },
+// Takes a SupplierOrder id, not an Order id — an order can ship as more than one parcel now,
+// each with its own tracking number, so this sends one email per parcel.
+export async function sendShippingEmail(supplierOrderId: string) {
+  const supplierOrder = await prisma.supplierOrder.findUnique({
+    where: { id: supplierOrderId },
     include: {
-      customer: { select: { email: true, firstName: true } },
-      store: { select: { name: true, primaryColor: true, currency: true, emailFromName: true, emailFromAddress: true } },
+      items: { select: { title: true, quantity: true } },
+      order: {
+        include: {
+          customer: { select: { email: true, firstName: true } },
+          store: { select: { name: true, primaryColor: true, currency: true, emailFromName: true, emailFromAddress: true } },
+          supplierOrders: { select: { id: true } },
+        },
+      },
     },
   })
-  if (!order || !order.trackingNumber) return
+  if (!supplierOrder || !supplierOrder.trackingNumber) return
+  const order = supplierOrder.order
 
   const to = order.customer?.email ?? order.guestEmail
   if (!to) return
@@ -190,17 +199,24 @@ export async function sendShippingEmail(orderId: string) {
   const primaryColor = order.store?.primaryColor ?? '#111827'
   const firstName = order.customer?.firstName ?? 'there'
 
-  const trackingBtn = order.trackingUrl
-    ? `<a href="${order.trackingUrl}" style="display:inline-block;margin-top:20px;padding:12px 24px;background:${primaryColor};color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">Track my order</a>`
+  const trackingBtn = supplierOrder.trackingUrl
+    ? `<a href="${supplierOrder.trackingUrl}" style="display:inline-block;margin-top:20px;padding:12px 24px;background:${primaryColor};color:#ffffff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">Track my order</a>`
     : ''
+
+  const multiParcelNote = order.supplierOrders.length > 1
+    ? `<p style="margin:0 0 20px;color:#6b7280;font-size:14px;">This order is shipping in ${order.supplierOrders.length} separate parcels — this email covers the one below.</p>`
+    : ''
+
+  const itemsList = supplierOrder.items.map((i) => `${i.quantity}× ${i.title}`).join(', ')
 
   const content = `
     <h2 style="margin:0 0 6px;font-size:24px;font-weight:700;color:#111827;">Your order is on its way!</h2>
-    <p style="margin:0 0 28px;color:#6b7280;font-size:15px;">Hi ${firstName}, great news — your order #${order.orderNumber} has been shipped.</p>
+    <p style="margin:0 0 12px;color:#6b7280;font-size:15px;">Hi ${firstName}, great news — part of your order #${order.orderNumber} has been shipped: ${itemsList}.</p>
+    ${multiParcelNote}
 
     <div style="background:#f9fafb;border-radius:8px;padding:20px;margin-bottom:28px;">
       <p style="margin:0 0 6px;font-size:13px;color:#6b7280;">Tracking number</p>
-      <p style="margin:0;font-size:18px;font-weight:700;color:#111827;font-family:monospace;">${order.trackingNumber}</p>
+      <p style="margin:0;font-size:18px;font-weight:700;color:#111827;font-family:monospace;">${supplierOrder.trackingNumber}</p>
       ${trackingBtn}
     </div>
 
@@ -264,7 +280,10 @@ export async function sendAbandonedCartEmails() {
 
 // ─── Review invitation ────────────────────────────────────────────────────────
 
-export async function sendReviewInvitationEmail(orderId: string) {
+// `itemIds`, when given, restricts the invitation to just those items — used when a single
+// parcel ships so items from a sibling (not-yet-shipped) parcel that already picked up a
+// review token earlier don't get re-invited on every subsequent parcel's shipment.
+export async function sendReviewInvitationEmail(orderId: string, itemIds?: string[]) {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     include: {
@@ -282,7 +301,8 @@ export async function sendReviewInvitationEmail(orderId: string) {
   const primaryColor = order.store?.primaryColor ?? '#111827'
   const firstName = order.customer?.firstName ?? 'there'
 
-  const itemsWithTokens = order.items.filter((i) => i.reviewToken)
+  const scopedItems = itemIds ? order.items.filter((i) => itemIds.includes(i.id)) : order.items
+  const itemsWithTokens = scopedItems.filter((i) => i.reviewToken)
   if (itemsWithTokens.length === 0) return
 
   const reviewLinks = itemsWithTokens.map((item) => {

@@ -51,16 +51,21 @@ router.post('/', async (req: Request, res: Response) => {
       sendOrderConfirmationEmail(orderId).catch((e: Error) => console.error('Email error:', e.message))
     )
 
-    // Forward to suppliers sequentially to avoid race conditions on fulfillmentStatus
+    // Split into per-supplier parcels, then auto-submit the ones with an ordering API
+    // (CJ/AliExpress) sequentially to avoid race conditions on fulfillmentStatus. MANUAL
+    // parcels (no adapter — e.g. Good Display) just sit AWAITING_MANUAL for the Fulfillment
+    // Queue.
     ;(async () => {
       try {
-        const { fulfillOrderWithCJ } = await import('../../services/cjdropshipping')
-        await fulfillOrderWithCJ(orderId)
-      } catch (e: any) { console.error('CJ fulfillment error:', e.message) }
-      try {
-        const { fulfillOrderWithAliExpress } = await import('../../services/aliexpressFulfillment')
-        await fulfillOrderWithAliExpress(orderId)
-      } catch (e: any) { console.error('AliExpress fulfillment error:', e.message) }
+        const { splitOrderIntoSupplierOrders, submitSupplierOrder } = await import('../../services/supplierOrderFulfillment')
+        const supplierOrders = await splitOrderIntoSupplierOrders(orderId)
+        for (const so of supplierOrders) {
+          if (so.supplierKey === 'MANUAL') continue
+          try {
+            await submitSupplierOrder(so.id)
+          } catch (e: any) { console.error(`${so.supplierKey} fulfillment error:`, e.message) }
+        }
+      } catch (e: any) { console.error('Supplier order split failed:', e.message) }
     })()
   }
 

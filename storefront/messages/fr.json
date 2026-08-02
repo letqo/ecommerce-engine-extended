@@ -116,7 +116,8 @@
     "applying": "Application...",
     "removeCoupon": "Retirer",
     "deliveryEstimate": "Livraison estimée : {range}",
-    "deliveryEstimateCalculating": "Calcul du délai de livraison…"
+    "deliveryEstimateCalculating": "Calcul du délai de livraison…",
+    "multipleParcelsNote": "Cette commande sera expédiée en plusieurs colis."
   },
   "confirmation": {
     "title": "Merci !",
@@ -143,7 +144,8 @@
     "trackPackage": "Suivre le colis",
     "noTrackingYet": "Suivi pas encore disponible",
     "noTrackingMessage": "Votre commande est en cours de préparation. Les informations de suivi apparaîtront ici une fois le colis expédié.",
-    "items": "Articles commandés"
+    "items": "Articles commandés",
+    "multipleParcelsNote": "Cette commande est expédiée en plusieurs colis — chacun est suivi séparément ci-dessous."
   },
   "account": {
     "title": "Mon compte",

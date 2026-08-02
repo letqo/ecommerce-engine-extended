@@ -116,7 +116,8 @@
     "applying": "Applying...",
     "removeCoupon": "Remove",
     "deliveryEstimate": "Estimated delivery: {range}",
-    "deliveryEstimateCalculating": "Calculating delivery estimate…"
+    "deliveryEstimateCalculating": "Calculating delivery estimate…",
+    "multipleParcelsNote": "This order will ship in more than one parcel."
   },
   "confirmation": {
     "title": "Thank you!",
@@ -143,7 +144,8 @@
     "trackPackage": "Track package",
     "noTrackingYet": "Tracking not available yet",
     "noTrackingMessage": "Your order is being prepared. Tracking info will appear here once your package ships.",
-    "items": "Order items"
+    "items": "Order items",
+    "multipleParcelsNote": "This order is shipping in more than one parcel — each one is tracked separately below."
   },
   "account": {
     "title": "My Account",

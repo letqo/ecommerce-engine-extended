@@ -19,9 +19,21 @@ router.get('/:orderNumber/status', async (req: Request, res: Response, next: Nex
       },
       select: {
         id: true, orderNumber: true, status: true, paymentStatus: true,
-        fulfillmentStatus: true, total: true, currency: true, trackingNumber: true,
-        trackingUrl: true, shippingAddress: true, items: { select: { title: true, variantTitle: true, quantity: true, price: true, imageUrl: true } },
+        fulfillmentStatus: true, total: true, currency: true, shippingAddress: true,
         createdAt: true,
+        // Whole-order item list — always present, even in the brief window right after
+        // checkout before the async supplier split has run (see supplierOrders below).
+        items: { select: { title: true, variantTitle: true, quantity: true, price: true, imageUrl: true } },
+        // An order can now ship as more than one parcel — each with its own status/tracking.
+        // Empty until the split runs (seconds after payment); the storefront falls back to a
+        // single "processing" block when this is empty.
+        supplierOrders: {
+          select: {
+            id: true, supplierKey: true, supplierName: true, status: true,
+            trackingNumber: true, trackingUrl: true, trackingCarrier: true, shippedAt: true,
+            items: { select: { title: true, variantTitle: true, quantity: true, price: true, imageUrl: true } },
+          },
+        },
       },
     })
     if (!order) throw createError('Order not found', 404, 'NOT_FOUND')
@@ -37,7 +49,7 @@ router.get('/', requireCustomer, async (req: CustomerRequest, res: Response, nex
       orderBy: { createdAt: 'desc' },
       select: {
         id: true, orderNumber: true, status: true, total: true, currency: true,
-        trackingNumber: true, items: { select: { title: true, quantity: true, imageUrl: true } },
+        items: { select: { title: true, quantity: true, imageUrl: true } },
         createdAt: true,
       },
     })

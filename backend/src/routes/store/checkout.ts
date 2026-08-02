@@ -5,6 +5,7 @@ import { optionalCustomer, CustomerRequest } from '../../middleware/auth'
 import { createError } from '../../middleware/errorHandler'
 import { calculateOrder } from '../../utils/calculateOrder'
 import { estimateDeliveryForCountry } from '../../services/shippingAvailability'
+import { previewParcelCount } from '../../services/supplierOrderFulfillment'
 import { ensureSubscriber } from './newsletter'
 import { z } from 'zod'
 
@@ -110,8 +111,11 @@ router.post('/delivery-estimate', async (req: CustomerRequest, res: Response, ne
       country: z.string().min(2),
     }).parse(req.body)
 
-    const estimate = await estimateDeliveryForCountry(items, country.toUpperCase(), req.storeId)
-    res.json({ success: true, data: estimate })
+    const [estimate, parcelCount] = await Promise.all([
+      estimateDeliveryForCountry(items, country.toUpperCase(), req.storeId),
+      previewParcelCount(items),
+    ])
+    res.json({ success: true, data: { ...estimate, parcelCount } })
   } catch (err) { next(err) }
 })
 

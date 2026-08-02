@@ -11,7 +11,8 @@ import { createDiscount, updateDiscount } from '../routes/admin/discounts'
 import { moderateReview } from '../routes/admin/reviews'
 import { createBlogPost, updateBlogPost, setBlogPostPublished } from '../routes/admin/blog'
 import { createShippingZone, createShippingRate } from '../routes/admin/shipping'
-import { fulfillOrder, addOrderNote } from '../routes/admin/orders'
+import { addOrderNote } from '../routes/admin/orders'
+import { fulfillSupplierOrderManually } from './supplierOrderFulfillment'
 import { generateStoreContent, StoreContentField, enhanceProduct, translateProductContent, translateCategoryContent, translateStoreContent, translateThemeStrings } from './aiEnhance'
 import { generateFromPromptAndUpload } from './imageStudio'
 import { extractThemeStrings } from '../lib/themeText'
@@ -514,11 +515,11 @@ const TOOLS: Anthropic.Tool[] = [
   },
   {
     name: 'fulfill_order',
-    description: 'Mark an order shipped by attaching a tracking number. Sends the customer their shipping notification.',
+    description: 'Mark one parcel of an order shipped by attaching a tracking number (an order can ship as more than one parcel — use get_order to find the right supplierOrderId). Sends the customer their shipping notification for that parcel.',
     input_schema: {
       type: 'object',
-      properties: { orderId: { type: 'string' }, trackingNumber: { type: 'string' }, trackingUrl: { type: 'string' } },
-      required: ['orderId', 'trackingNumber'],
+      properties: { supplierOrderId: { type: 'string' }, trackingNumber: { type: 'string' }, trackingUrl: { type: 'string' } },
+      required: ['supplierOrderId', 'trackingNumber'],
     },
   },
   {
@@ -1183,15 +1184,22 @@ export async function runTool(storeId: string, name: string, input: any): Promis
     case 'get_order': {
       const order = await prisma.order.findFirst({
         where: { id: input.orderId, storeId },
-        include: { customer: true, items: true, timeline: { orderBy: { createdAt: 'asc' } }, refunds: true },
+        include: {
+          customer: true,
+          supplierOrders: { include: { items: true } },
+          timeline: { orderBy: { createdAt: 'asc' } },
+          refunds: true,
+        },
       })
       if (!order) throw new Error('Order not found')
       return { result: { order }, action: { tool: name, summary: `Looked up order #${order.orderNumber}` } }
     }
 
     case 'fulfill_order': {
-      const order = await fulfillOrder(storeId, input.orderId, input.trackingNumber, input.trackingUrl, ASSISTANT_ACTOR)
-      return { result: { ok: true }, action: { tool: name, summary: `Marked order #${order.orderNumber} shipped with tracking ${input.trackingNumber}` } }
+      const so = await prisma.supplierOrder.findFirst({ where: { id: input.supplierOrderId, storeId } })
+      if (!so) throw new Error('Parcel not found')
+      const updated = await fulfillSupplierOrderManually(so.id, { trackingNumber: input.trackingNumber, trackingUrl: input.trackingUrl }, ASSISTANT_ACTOR)
+      return { result: { ok: true }, action: { tool: name, summary: `Marked a parcel of order (supplier order ${updated.id}) shipped with tracking ${input.trackingNumber}` } }
     }
 
     case 'add_order_note': {
@@ -1222,16 +1230,19 @@ export async function runTool(storeId: string, name: string, input: any): Promis
     case 'fulfill_order_with_supplier': {
       const order = await prisma.order.findFirst({
         where: { id: input.orderId, storeId },
-        include: { items: { include: { variant: { include: { product: true } } } } },
+        include: { items: { include: { variant: { include: { product: true } } } }, supplierOrders: true },
       })
       if (!order) throw new Error('Order not found')
       const supplier = input.supplier
+      const supplierKey = supplier === 'cj' ? 'CJ' : 'ALIEXPRESS'
+      const existingSupplierOrder = order.supplierOrders.find((so) => so.supplierKey === supplierKey)
+      if (existingSupplierOrder && (existingSupplierOrder.status === 'SUBMITTED' || existingSupplierOrder.status === 'SHIPPED')) {
+        throw new Error(`Already submitted to ${supplier === 'cj' ? 'CJ' : 'AliExpress'} (order ID: ${existingSupplierOrder.externalOrderId})`)
+      }
       if (supplier === 'cj') {
-        if (order.cjOrderId) throw new Error(`Already submitted to CJ (order ID: ${order.cjOrderId})`)
         const hasItems = order.items.some((i) => i.variant?.cjVariantId)
         if (!hasItems) throw new Error('No CJ products in this order.')
       } else {
-        if (order.aliexpressOrderId) throw new Error(`Already submitted to AliExpress (order ID: ${order.aliexpressOrderId})`)
         const hasItems = order.items.some((i) => i.variant?.product?.aliexpressProductId)
         if (!hasItems) throw new Error('No AliExpress products in this order.')
       }

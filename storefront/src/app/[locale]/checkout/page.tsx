@@ -89,6 +89,7 @@ export default function CheckoutPage() {
   const [summaryOpen, setSummaryOpen] = useState(false)
   const [deliveryEstimate, setDeliveryEstimate] = useState<{ min: number; max: number } | null>(null)
   const [deliveryLoading, setDeliveryLoading] = useState(false)
+  const [parcelCount, setParcelCount] = useState(1)
 
   const [couponCode, setCouponCode] = useState('')
   const [couponApplying, setCouponApplying] = useState(false)
@@ -118,15 +119,16 @@ export default function CheckoutPage() {
     }
     setDeliveryLoading(true)
     const t = setTimeout(() => {
-      api.post<{ success: boolean; data: { deliveryMinDays?: number; deliveryMaxDays?: number } }>(
+      api.post<{ success: boolean; data: { deliveryMinDays?: number; deliveryMaxDays?: number; parcelCount?: number } }>(
         '/store/checkout/delivery-estimate',
         { items: items.map((i) => ({ variantId: i.variantId, quantity: i.quantity })), country }
       )
         .then((res) => {
-          const { deliveryMinDays, deliveryMaxDays } = res.data
+          const { deliveryMinDays, deliveryMaxDays, parcelCount: pc } = res.data
           setDeliveryEstimate(
             deliveryMinDays != null ? { min: deliveryMinDays, max: deliveryMaxDays ?? deliveryMinDays } : null
           )
+          setParcelCount(pc ?? 1)
         })
         .catch(() => setDeliveryEstimate(null))
         .finally(() => setDeliveryLoading(false))
@@ -280,6 +282,9 @@ export default function CheckoutPage() {
           <p className="text-xs text-gray-500 pt-1">
             {deliveryLoading ? t('deliveryEstimateCalculating') : t('deliveryEstimate', { range: deliveryRangeText! })}
           </p>
+        )}
+        {!deliveryLoading && parcelCount > 1 && (
+          <p className="text-xs text-gray-500">{t('multipleParcelsNote')}</p>
         )}
       </div>
     </div>

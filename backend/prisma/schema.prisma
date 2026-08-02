@@ -431,18 +431,14 @@ model Order {
   shippingAddress       Json
   billingAddress        Json?
   shippingMethod        String?
-  trackingNumber        String?
-  trackingUrl           String?
-  // First time trackingNumber was set — the anchor damage-claim windows count from,
-  // since we don't reliably know an exact delivery date (see DamageClaim below).
+  // First time ANY of this order's SupplierOrders shipped — the anchor damage-claim windows
+  // count from, since we don't reliably know an exact delivery date (see DamageClaim below).
+  // Per-parcel tracking now lives on SupplierOrder, not here.
   shippedAt             DateTime?
   notes                 String?
   paymentMethod         String?
   stripePaymentIntentId String?
-  cjOrderId             String?
-  cjOrderStatus         String?
-  aliexpressOrderId     String?
-  aliexpressOrderStatus String?
+  supplierOrders        SupplierOrder[]
   timeline              OrderTimeline[]
   refunds               Refund[]
   claims                DamageClaim[]
@@ -452,6 +448,50 @@ model Order {
   @@index([storeId, status])
   @@index([storeId, customerId])
   @@index([orderNumber])
+}
+
+// One customer Order can ship as more than one parcel — a SupplierOrder is the unit that
+// tracks ONE supplier's slice of an order (its items, submission status, and tracking)
+// independently of the others. `MANUAL` covers any supplier without an ordering API (e.g.
+// Good Display) — `supplierName` carries which one, so onboarding a new manual supplier never
+// needs a schema change. See SUPPLIER_FULFILLMENT.md for the full model.
+model SupplierOrder {
+  id              String              @id @default(uuid())
+  orderId         String
+  order           Order               @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  storeId         String?
+  supplierKey     SupplierKey
+  supplierName    String?
+  status          SupplierOrderStatus @default(AWAITING_MANUAL)
+  externalOrderId String?
+  externalStatus  String?
+  trackingNumber  String?
+  trackingCarrier String?
+  trackingUrl     String?
+  lastError       String?
+  submittedAt     DateTime?
+  shippedAt       DateTime?
+  items           OrderItem[]
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  @@index([storeId, status])
+  @@index([orderId])
+  @@index([externalOrderId])
+}
+
+enum SupplierKey {
+  CJ
+  ALIEXPRESS
+  MANUAL
+}
+
+enum SupplierOrderStatus {
+  AWAITING_MANUAL
+  SUBMITTED
+  SHIPPED
+  ERROR
+  CANCELLED
 }
 
 enum OrderStatus {
@@ -484,6 +524,8 @@ model OrderItem {
   order           Order          @relation(fields: [orderId], references: [id], onDelete: Cascade)
   variantId       String
   variant         ProductVariant @relation(fields: [variantId], references: [id])
+  supplierOrderId String?
+  supplierOrder   SupplierOrder? @relation(fields: [supplierOrderId], references: [id])
   title           String
   variantTitle    String
   sku             String?
@@ -495,6 +537,7 @@ model OrderItem {
   createdAt       DateTime       @default(now())
 
   @@index([variantId])
+  @@index([supplierOrderId])
 }
 
 model OrderTimeline {

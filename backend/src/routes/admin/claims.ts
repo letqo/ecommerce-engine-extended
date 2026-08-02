@@ -42,7 +42,7 @@ router.get('/:id', async (req: AdminRequest, res: Response, next: NextFunction) 
         order: {
           select: {
             orderNumber: true, total: true, currency: true, guestEmail: true, shippedAt: true,
-            cjOrderId: true, aliexpressOrderId: true,
+            supplierOrders: { select: { supplierKey: true, supplierName: true, externalOrderId: true } },
             customer: { select: { email: true } },
             items: {
               select: {

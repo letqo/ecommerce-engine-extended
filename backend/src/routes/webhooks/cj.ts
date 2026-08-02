@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express'
 import crypto from 'crypto'
 import { prisma } from '../../config/database'
 import { CJAdapter } from '../../suppliers/CJAdapter'
+import { recomputeOrderFulfillment } from '../../services/supplierOrderFulfillment'
 
 const router = Router()
 
@@ -126,14 +127,14 @@ async function handleOrderUpdate(params: any) {
   const status = params.orderStatus ?? params.status
   if (!cjOrderId) return
 
-  const order = await prisma.order.findFirst({ where: { cjOrderId } })
-  if (!order) return
+  const so = await prisma.supplierOrder.findFirst({ where: { supplierKey: 'CJ', externalOrderId: cjOrderId }, include: { order: { select: { orderNumber: true } } } })
+  if (!so) return
 
-  await prisma.order.update({
-    where: { id: order.id },
-    data: { cjOrderStatus: status },
+  await prisma.supplierOrder.update({
+    where: { id: so.id },
+    data: { externalStatus: status },
   })
-  console.log(`[CJ Webhook] Order ${order.orderNumber} status → ${status}`)
+  console.log(`[CJ Webhook] Order ${so.order.orderNumber} parcel status → ${status}`)
 }
 
 async function handleLogisticsUpdate(params: any) {
@@ -141,34 +142,34 @@ async function handleLogisticsUpdate(params: any) {
   const trackingNumber = params.trackNumber ?? params.trackingNumber
   if (!cjOrderId) return
 
-  const order = await prisma.order.findFirst({ where: { cjOrderId } })
-  if (!order) return
+  const so = await prisma.supplierOrder.findFirst({ where: { supplierKey: 'CJ', externalOrderId: cjOrderId }, include: { order: { select: { orderNumber: true } } } })
+  if (!so) return
 
-  const updates: any = { cjOrderStatus: params.orderStatus ?? 'SHIPPED' }
+  const updates: any = { externalStatus: params.orderStatus ?? 'SHIPPED' }
 
-  if (trackingNumber && !order.trackingNumber) {
+  if (trackingNumber && !so.trackingNumber) {
     updates.trackingNumber = trackingNumber
     updates.trackingUrl = params.trackingUrl ?? null
     updates.status = 'SHIPPED'
-    updates.fulfillmentStatus = 'FULFILLED'
 
     await prisma.orderTimeline.create({
       data: {
-        orderId: order.id,
-        message: `Shipped via ${params.logisticName ?? 'carrier'} — tracking: ${trackingNumber}`,
+        orderId: so.orderId,
+        message: `Parcel (CJ) shipped via ${params.logisticName ?? 'carrier'} — tracking: ${trackingNumber}`,
         createdBy: 'system',
       },
     })
 
     // Send shipping email
     import('../../services/email').then(({ sendShippingEmail, sendReviewInvitationEmail }) => {
-      sendShippingEmail(order.id).catch(() => {})
-      sendReviewInvitationEmail(order.id).catch(() => {})
+      sendShippingEmail(so.id).catch(() => {})
+      sendReviewInvitationEmail(so.orderId).catch(() => {})
     })
   }
 
-  await prisma.order.update({ where: { id: order.id }, data: updates })
-  console.log(`[CJ Webhook] Logistics for order ${order.orderNumber}: tracking=${trackingNumber ?? 'none'}`)
+  await prisma.supplierOrder.update({ where: { id: so.id }, data: updates })
+  if (trackingNumber) await recomputeOrderFulfillment(so.orderId)
+  console.log(`[CJ Webhook] Logistics for order ${so.order.orderNumber}: tracking=${trackingNumber ?? 'none'}`)
 }
 
 export default router
