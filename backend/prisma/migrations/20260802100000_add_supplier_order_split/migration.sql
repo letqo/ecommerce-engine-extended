@@ -10,12 +10,16 @@ CREATE TYPE "SupplierKey" AS ENUM ('CJ', 'ALIEXPRESS', 'MANUAL');
 CREATE TYPE "SupplierOrderStatus" AS ENUM ('AWAITING_MANUAL', 'SUBMITTED', 'SHIPPED', 'ERROR', 'CANCELLED');
 
 -- AlterTable
-ALTER TABLE "Order" DROP COLUMN "trackingNumber",
-DROP COLUMN "trackingUrl",
-DROP COLUMN "cjOrderId",
-DROP COLUMN "cjOrderStatus",
-DROP COLUMN "aliexpressOrderId",
-DROP COLUMN "aliexpressOrderStatus";
+-- IF EXISTS on each: aliexpressOrderId/aliexpressOrderStatus were added directly on the
+-- original database outside the migration history and never captured in a migration file,
+-- so they don't exist on a genuinely fresh database — see 20260716133800_add_theme_table
+-- for the same class of drift.
+ALTER TABLE "Order" DROP COLUMN IF EXISTS "trackingNumber",
+DROP COLUMN IF EXISTS "trackingUrl",
+DROP COLUMN IF EXISTS "cjOrderId",
+DROP COLUMN IF EXISTS "cjOrderStatus",
+DROP COLUMN IF EXISTS "aliexpressOrderId",
+DROP COLUMN IF EXISTS "aliexpressOrderStatus";
 
 -- AlterTable
 ALTER TABLE "OrderItem" ADD COLUMN "supplierOrderId" TEXT;
