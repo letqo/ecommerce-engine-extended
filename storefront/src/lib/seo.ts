@@ -24,7 +24,7 @@ export async function getStoreInfo(): Promise<StoreInfo | null> {
   try {
     const res = await fetch(`${API_URL}/store/store/info`, {
       headers: { 'X-Store-Id': STORE_ID },
-      next: { revalidate: 60 },
+      cache: 'no-store',
     })
     if (!res.ok) return null
     const json = await res.json()

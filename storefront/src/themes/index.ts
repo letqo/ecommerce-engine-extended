@@ -94,7 +94,7 @@ export async function getThemeConfig(locale?: string): Promise<ThemeConfig> {
     const res = await fetch(
       `${process.env.NEXT_PUBLIC_API_URL}/store/store/theme-config${sep}`,
       {
-        next: { revalidate: 60 },
+        cache: 'no-store',
         headers: {
           'X-Store-Id': process.env.NEXT_PUBLIC_STORE_ID ?? '',
         },

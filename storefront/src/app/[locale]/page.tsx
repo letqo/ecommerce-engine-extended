@@ -23,7 +23,7 @@ import type { HomeSection } from '@/themes'
 
 const API = process.env.NEXT_PUBLIC_API_URL
 const headers = { 'X-Store-Id': STORE_ID }
-const opts = { headers, next: { revalidate: 60 } }
+const opts = { headers, cache: 'no-store' as RequestCache }
 
 async function apiFetch<T>(path: string, locale: string): Promise<T[]> {
   try {
