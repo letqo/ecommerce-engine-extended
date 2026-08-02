@@ -22,6 +22,21 @@ export default function TrustBadgesSection({ items = [], variant = 'default' }: 
 
   const isCompact = variant === 'compact'
 
+  if (variant === 'spec-strip') {
+    return (
+      <section data-theme-section="home-trust" data-variant="spec-strip" className="theme-home-trust">
+        <div className="theme-spec-strip-grid">
+          {items.map((badge, i) => (
+            <div key={i} className="theme-spec">
+              {badge.description && <span className="theme-spec-k">{badge.description}</span>}
+              <span className="theme-spec-v">{badge.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
   return (
     <section data-theme-section="home-trust" data-variant={variant} className="theme-home-trust border-y border-gray-100 py-8">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">

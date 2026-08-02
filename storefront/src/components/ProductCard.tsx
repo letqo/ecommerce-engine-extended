@@ -11,6 +11,8 @@ interface Product {
   id: string
   slug: string
   title: string
+  shortDescription?: string | null
+  tags?: string[]
   images?: { url: string }[]
   variants: { price: number; compareAtPrice?: number | null }[]
 }
@@ -115,6 +117,45 @@ export default function ProductCard({ product, href, variant = 'default' }: { pr
         <button className="theme-card-action mt-2 w-full py-1.5 text-xs font-medium border border-gray-300 rounded-btn hover:bg-gray-50 transition-colors">
           Quick View
         </button>
+      </Link>
+    )
+  }
+
+  if (variant === 'plate') {
+    const hasImage = !!product.images?.[0]?.url
+    return (
+      <Link href={href ?? `/products/${product.slug}`} data-theme-section="product-card" data-variant="plate" className="theme-product-card group block">
+        <div className="theme-card-image relative">
+          <div className="theme-plate-screen flex items-center justify-center overflow-hidden">
+            {hasImage ? (
+              <Image src={image} alt={product.title} width={480} height={300} className="w-full h-full object-cover" />
+            ) : (
+              <svg className="theme-plate-mountains" viewBox="0 0 100 40" preserveAspectRatio="xMidYMax meet">
+                <path d="M0 40 L18 14 L30 26 L46 6 L64 30 L78 18 L100 40 Z" />
+              </svg>
+            )}
+          </div>
+          <button
+            onClick={toggleWishlist}
+            className="absolute top-2 right-2 w-8 h-8 rounded-full bg-white/80 backdrop-blur-sm flex items-center justify-center hover:bg-white transition-colors z-10"
+          >
+            <Heart size={16} className={inWishlist ? 'fill-red-500 text-red-500' : 'text-gray-600'} />
+          </button>
+        </div>
+        <div className="theme-plate-meta flex justify-between items-start gap-4">
+          <div>
+            <h3 className="theme-card-title">{product.title}</h3>
+            {product.shortDescription && <p className="theme-plate-desc">{product.shortDescription}</p>}
+          </div>
+          <span className="theme-card-price whitespace-nowrap">{formatPrice(price, currency)}</span>
+        </div>
+        {product.tags && product.tags.length > 0 && (
+          <div className="theme-plate-chips flex flex-wrap gap-2">
+            {product.tags.slice(0, 3).map((tag) => (
+              <span key={tag} className="theme-chip">{tag}</span>
+            ))}
+          </div>
+        )}
       </Link>
     )
   }

@@ -100,9 +100,20 @@ export default function HeroBanner({ variant = 'default', headline, subtext, cta
         <div className="theme-hero-visual hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5" />
       )}
 
-      {/* Showcase column */}
-      {isShowcase && (
-        <div className="theme-hero-showcase hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5" />
+      {/* Showcase column — a device-screen illustration when there's no real product photo to show yet */}
+      {isShowcase && !bannerUrl && (
+        <div className="theme-hero-showcase hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5">
+          <div className="theme-device">
+            <div className="theme-device-screen theme-device-refresh">
+              <span className="theme-device-month">{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
+              <span className="theme-device-date">{new Date().getDate()}</span>
+              <span className="theme-device-caption">
+                <span>{new Date().toLocaleDateString(undefined, { weekday: 'long' })}</span>
+                <span>Refreshes daily</span>
+              </span>
+            </div>
+          </div>
+        </div>
       )}
 
       <div className="theme-slot theme-slot-hero-after" aria-hidden="true" />

@@ -40,7 +40,7 @@ export interface ThemeSections {
   home: HomeSection[]
   productsGrid: 'grid-4' | 'grid-3' | 'grid-2'
   productDetail: 'side-by-side' | 'stacked' | 'gallery-sticky'
-  productCard: 'default' | 'overlay' | 'detailed'
+  productCard: 'default' | 'overlay' | 'detailed' | 'plate'
   cartLayout: 'sidebar' | 'bottom-bar'
   checkoutLayout: 'two-column' | 'single-column'
   announcementBar?: { messages: string[]; speed?: number }
