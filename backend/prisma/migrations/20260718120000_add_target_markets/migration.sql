@@ -1,1 +1,0 @@
-ALTER TABLE "Store" ADD COLUMN "targetMarkets" TEXT[] NOT NULL DEFAULT ARRAY['DE','FR','IT','ES','US']::TEXT[];

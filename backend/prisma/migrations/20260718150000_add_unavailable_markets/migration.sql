@@ -1,1 +1,0 @@
-ALTER TABLE "Product" ADD COLUMN "unavailableMarkets" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
