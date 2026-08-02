@@ -1,0 +1,66 @@
+{
+  "name": "Showcase Store",
+  "description": "A rich home page with categories, testimonials, trust badges, and more",
+  "vars": {
+    "--primary": "#1a1a2e",
+    "--primary-hover": "#16213e",
+    "--primary-text": "#ffffff",
+    "--accent": "#e94560",
+    "--hero-bg": "linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)",
+    "--hero-text": "#ffffff",
+    "--hero-sub": "#a8b2d1",
+    "--footer-bg": "#1a1a2e",
+    "--footer-text": "#a8b2d1",
+    "--font-sans": "'Inter', system-ui, sans-serif",
+    "--radius-btn": "0.5rem",
+    "--radius-card": "0.75rem"
+  },
+  "css": "",
+  "sections": {
+    "header": {
+      "variant": "default",
+      "navItems": [
+        { "label": "Shop", "href": "/products" },
+        { "label": "Collections", "href": "/products", "children": [
+          { "label": "New Arrivals", "href": "/products?sort=createdAt_desc" },
+          { "label": "Best Sellers", "href": "/products?tag=best-seller" }
+        ]},
+        { "label": "Blog", "href": "/blog" }
+      ]
+    },
+    "footer": { "variant": "default" },
+    "announcementBar": {
+      "messages": [
+        "Free shipping on orders over $50",
+        "New arrivals every week",
+        "30-day hassle-free returns"
+      ]
+    },
+    "home": [
+      { "type": "hero", "variant": "centered" },
+      { "type": "categories", "variant": "grid", "heading": "Shop by Category" },
+      { "type": "featured-products", "variant": "grid-4", "heading": "Featured Products" },
+      { "type": "promo-banner", "variant": "default", "text": "Summer Sale — Up to 30% off selected items", "cta": { "label": "Shop Sale", "href": "/products?tag=sale" } },
+      { "type": "new-arrivals", "variant": "carousel", "heading": "Just Arrived" },
+      { "type": "image-with-text", "heading": "Crafted with Care", "text": "Every product in our store is hand-picked for quality and value. We work directly with artisans and manufacturers to bring you the best.", "cta": { "label": "Our Story", "href": "/about" }, "imagePosition": "left" },
+      { "type": "trust-badges", "variant": "default", "items": [
+        { "icon": "truck", "label": "Free Shipping", "description": "On orders over $50" },
+        { "icon": "shield", "label": "Secure Checkout", "description": "256-bit SSL encryption" },
+        { "icon": "refresh", "label": "Easy Returns", "description": "30-day money back" },
+        { "icon": "headphones", "label": "24/7 Support", "description": "We're here to help" }
+      ]},
+      { "type": "testimonials", "variant": "grid", "heading": "What Our Customers Say", "items": [
+        { "name": "Sarah M.", "text": "Absolutely love the quality! Fast shipping and beautiful packaging too.", "rating": 5 },
+        { "name": "James R.", "text": "Great selection and fair prices. This is now my go-to store.", "rating": 5 },
+        { "name": "Emily L.", "text": "Customer service went above and beyond to help me find the perfect gift.", "rating": 4 }
+      ]},
+      { "type": "blog-posts", "variant": "grid", "heading": "Latest from the Blog" },
+      { "type": "newsletter", "variant": "banner" }
+    ],
+    "productsGrid": "grid-4",
+    "productDetail": "side-by-side",
+    "productCard": "default",
+    "cartLayout": "sidebar",
+    "checkoutLayout": "two-column"
+  }
+}

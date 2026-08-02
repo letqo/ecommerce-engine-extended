@@ -1,0 +1,14 @@
+{
+  "name": "my-store",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["backend", "admin", "storefront", "shared"],
+  "scripts": {
+    "dev:backend": "npm run dev --workspace=backend",
+    "dev:admin": "npm run dev --workspace=admin",
+    "dev:store": "npm run dev --workspace=storefront",
+    "db:migrate": "npm run db:migrate --workspace=backend",
+    "db:seed": "npm run db:seed --workspace=backend",
+    "db:studio": "npm run db:studio --workspace=backend"
+  }
+}

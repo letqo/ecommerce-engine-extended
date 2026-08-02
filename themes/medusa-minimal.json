@@ -1,0 +1,57 @@
+{
+  "name": "Nordic Clean",
+  "description": "Ultra-clean monochrome storefront — sharp corners, generous whitespace, content-first design",
+  "vars": {
+    "--primary": "#000000",
+    "--primary-hover": "#1a1a1a",
+    "--primary-text": "#ffffff",
+    "--accent": "#374151",
+    "--hero-bg": "#ffffff",
+    "--hero-text": "#111827",
+    "--hero-sub": "#6b7280",
+    "--footer-bg": "#ffffff",
+    "--footer-text": "#6b7280",
+    "--font-sans": "'Inter', system-ui, -apple-system, sans-serif",
+    "--radius-btn": "0.25rem",
+    "--radius-card": "0"
+  },
+  "css": "[data-theme-section=\"header\"] { border-color: #e5e7eb; }\n\n[data-theme-section=\"hero\"] { min-height: 60vh; }\n[data-theme-section=\"hero\"] h1 { font-size: 3.5rem; font-weight: 400; letter-spacing: -0.03em; line-height: 1.1; }\n[data-theme-section=\"hero\"] p { font-size: 1.125rem; font-weight: 300; max-width: 32rem; margin-left: auto; margin-right: auto; }\n[data-theme-section=\"hero\"] a { font-weight: 500; border: 1px solid #000; background: transparent !important; color: #000 !important; padding: 0.75rem 2rem; letter-spacing: 0.02em; font-size: 0.875rem; }\n[data-theme-section=\"hero\"] a:hover { background: #000 !important; color: #fff !important; }\n\n.theme-home-categories a { border-radius: 0; }\n.theme-home-categories .aspect-square { aspect-ratio: 4/5; }\n\n[data-theme-section=\"product-card\"] { border: none; box-shadow: none; }\n[data-theme-section=\"product-card\"] img { border-radius: 0; }\n[data-theme-section=\"product-card\"] h3 { font-weight: 400; font-size: 0.875rem; }\n[data-theme-section=\"product-card\"] .font-bold { font-weight: 500; font-size: 0.875rem; }\n\n[data-theme-section=\"home-image-text\"] h2 { font-weight: 300; font-size: 2.5rem; letter-spacing: -0.02em; }\n[data-theme-section=\"home-image-text\"] p { font-weight: 300; }\n\n[data-theme-section=\"home-trust\"] { border-color: #f3f4f6; }\n\n[data-theme-section=\"home-testimonials\"] { background: #fafafa; }\n[data-theme-section=\"home-testimonials\"] > div > div > div { background: #fff; border: 1px solid #f3f4f6; border-radius: 0; box-shadow: none; }\n\n[data-theme-section=\"home-new-arrivals\"] h2,\n[data-theme-section=\"home-best-sellers\"] h2,\n[data-theme-section=\"home-featured\"] h2,\n.theme-home-categories h2 { font-weight: 400; letter-spacing: -0.01em; }\n\n[data-theme-section=\"footer\"] { border-top: 1px solid #e5e7eb; }\n.theme-footer-newsletter { background: #f9fafb !important; border-radius: 0 !important; }\n.theme-footer-newsletter h3 { color: #111827 !important; font-weight: 500; }\n.theme-footer-newsletter p { color: #6b7280 !important; }\n.theme-footer-copyright { border-color: #e5e7eb !important; color: #9ca3af !important; }\n.theme-footer h4 { color: #111827 !important; font-weight: 500; }\n.theme-footer a { color: #6b7280; }\n.theme-footer a:hover { color: #111827 !important; }\n\n.theme-header-logo { font-weight: 500; letter-spacing: -0.02em; text-transform: uppercase; font-size: 0.875rem; }",
+  "sections": {
+    "header": {
+      "variant": "default",
+      "navItems": [
+        { "label": "Shop", "href": "/products" },
+        { "label": "Collections", "href": "/products", "children": [
+          { "label": "New In", "href": "/products?sort=createdAt_desc" },
+          { "label": "Best Sellers", "href": "/products?tag=best-seller" }
+        ]},
+        { "label": "Blog", "href": "/blog" }
+      ]
+    },
+    "footer": { "variant": "default" },
+    "home": [
+      { "type": "hero", "variant": "centered" },
+      { "type": "categories", "variant": "grid", "heading": "Shop by Category" },
+      { "type": "new-arrivals", "variant": "grid-4", "heading": "New Arrivals" },
+      { "type": "image-with-text", "heading": "Designed for modern living", "text": "We curate products that blend quality craftsmanship with everyday functionality. Each piece is selected with intention — built to last, made to be used.", "cta": { "label": "Learn More", "href": "/about" }, "imagePosition": "left" },
+      { "type": "best-sellers", "variant": "grid-4", "heading": "Most Popular" },
+      { "type": "trust-badges", "variant": "compact", "items": [
+        { "icon": "truck", "label": "Free shipping over $50" },
+        { "icon": "refresh", "label": "30-day returns" },
+        { "icon": "lock", "label": "Secure checkout" },
+        { "icon": "award", "label": "Quality guaranteed" }
+      ]},
+      { "type": "testimonials", "variant": "grid", "heading": "What people are saying", "items": [
+        { "name": "Alex K.", "text": "Clean design, fast delivery. Exactly what I was looking for — no fuss, just quality.", "rating": 5 },
+        { "name": "Morgan S.", "text": "The attention to detail is remarkable. Simple packaging, beautiful product.", "rating": 5 },
+        { "name": "Taylor R.", "text": "Refreshingly straightforward shopping experience. Will definitely order again.", "rating": 4 }
+      ]},
+      { "type": "newsletter", "variant": "compact" }
+    ],
+    "productsGrid": "grid-4",
+    "productDetail": "side-by-side",
+    "productCard": "default",
+    "cartLayout": "sidebar",
+    "checkoutLayout": "two-column"
+  }
+}

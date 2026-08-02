@@ -1,0 +1,18 @@
+{
+  "name": "Elegant",
+  "description": "Sophisticated deep rose with serif typography and pill buttons",
+  "vars": {
+    "--primary": "#9f1239",
+    "--primary-hover": "#881337",
+    "--primary-text": "#ffffff",
+    "--accent": "#d4a017",
+    "--hero-bg": "linear-gradient(135deg, #1c0a0a 0%, #4c1d1d 100%)",
+    "--hero-text": "#fdf2f8",
+    "--hero-sub": "#fce7f3",
+    "--footer-bg": "#1c0a0a",
+    "--footer-text": "#fca5a5",
+    "--font-sans": "Georgia, 'Times New Roman', 'Palatino Linotype', serif",
+    "--radius-btn": "9999px",
+    "--radius-card": "1rem"
+  }
+}
