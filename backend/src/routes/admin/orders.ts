@@ -18,10 +18,12 @@ router.get('/', async (req: AdminRequest, res: Response, next: NextFunction) => 
     const page = parseInt(req.query.page as string) || 1
     const limit = parseInt(req.query.limit as string) || 20
     const status = req.query.status as string | undefined
+    const fulfillmentStatus = req.query.fulfillmentStatus as string | undefined
     const search = req.query.search as string | undefined
 
     const where: any = { storeId: req.storeId }
     if (status) where.status = status
+    if (fulfillmentStatus) where.fulfillmentStatus = fulfillmentStatus
     if (search) {
       const num = parseInt(search)
       where.OR = [

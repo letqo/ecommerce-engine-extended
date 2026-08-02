@@ -5,7 +5,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Search } from 'lucide-react'
+import { Search, PackageSearch } from 'lucide-react'
 
 const STATUS_COLORS: Record<string, any> = {
   PENDING: 'warning', CONFIRMED: 'default', PROCESSING: 'default',
@@ -24,19 +24,21 @@ export default function OrderList() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('ALL')
+  const [needsFulfillment, setNeedsFulfillment] = useState(false)
 
   const load = async () => {
     setLoading(true)
     const params = new URLSearchParams({ limit: '20' })
     if (search) params.set('search', search)
     if (status !== 'ALL') params.set('status', status)
+    if (needsFulfillment) params.set('fulfillmentStatus', 'UNFULFILLED')
     const res = await api.get(`/api/admin/orders?${params}`)
     setOrders(res.data.data)
     setTotal(res.data.meta.total)
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [status])
+  useEffect(() => { load() }, [status, needsFulfillment])
   useEffect(() => { const t = setTimeout(load, 400); return () => clearTimeout(t) }, [search])
 
   return (
@@ -59,6 +61,10 @@ export default function OrderList() {
             </button>
           ))}
         </div>
+        <button onClick={() => setNeedsFulfillment(!needsFulfillment)}
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${needsFulfillment ? 'bg-amber-100 border-amber-300 text-amber-900' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}>
+          <PackageSearch className="w-3.5 h-3.5" /> Needs fulfillment
+        </button>
       </div>
 
       <div className="border rounded-xl bg-white overflow-hidden">
