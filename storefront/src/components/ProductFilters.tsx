@@ -97,7 +97,7 @@ export default function ProductFilters() {
 
           {currentCategory && (
             <div className="theme-filter-category-tag flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full text-sm">
-              <span>{categories.find((c) => c.slug === currentCategory)?.name ?? currentCategory}</span>
+              <span>{categories.flatMap((c) => [c, ...(c.children ?? [])]).find((c) => c.slug === currentCategory)?.name ?? currentCategory}</span>
               <button onClick={() => updateParams({ category: null })} className="hover:text-gray-900">
                 <X size={14} />
               </button>
@@ -131,7 +131,12 @@ export default function ProductFilters() {
             >
               <option value="">{t('allCategories')}</option>
               {categories.map((cat) => (
-                <option key={cat.id} value={cat.slug}>{cat.name}</option>
+                <optgroup key={cat.id} label={cat.name}>
+                  <option value={cat.slug}>{cat.name}</option>
+                  {cat.children?.map((child) => (
+                    <option key={child.id} value={child.slug}>{'  '}{child.name}</option>
+                  ))}
+                </optgroup>
               ))}
             </select>
           )}

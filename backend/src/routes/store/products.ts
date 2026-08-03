@@ -30,8 +30,15 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const where: any = { storeId, status: 'ACTIVE' }
 
     if (categorySlug) {
-      const cat = await prisma.category.findFirst({ where: { slug: categorySlug, storeId } })
-      if (cat) where.categoryId = cat.id
+      const cat = await prisma.category.findFirst({
+        where: { slug: categorySlug, storeId },
+        include: { children: { select: { id: true } } },
+      })
+      if (cat) {
+        where.categoryId = cat.children.length > 0
+          ? { in: [cat.id, ...cat.children.map((c) => c.id)] }
+          : cat.id
+      }
     }
     if (featured) where.isFeatured = true
 

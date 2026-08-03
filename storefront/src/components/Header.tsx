@@ -21,6 +21,7 @@ interface Category {
   id: string
   name: string
   slug: string
+  children?: Category[]
 }
 
 function NavDropdown({ item, textColor }: { item: NavItem; textColor: string }) {
@@ -187,16 +188,27 @@ export default function Header({ variant = 'default', navItems, storeName = 'Sto
                   </Link>
 
                   {shopOpen && categories.length > 0 && (
-                    <div className="absolute top-full left-0 pt-2 z-50">
-                      <div className="bg-white border border-gray-200 rounded-lg shadow-lg py-2 min-w-[180px]">
+                    <div className="absolute top-full right-0 pt-2 z-50">
+                      <div className="bg-white border border-gray-200 rounded-lg shadow-lg py-2 w-[200px] max-h-[70vh] overflow-y-auto">
                         <Link href="/products" className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 font-medium">
                           {t('allProducts')}
                         </Link>
                         <div className="border-t border-gray-100 my-1" />
                         {categories.map((cat) => (
-                          <Link key={cat.id} href={`/products?category=${cat.slug}`} className="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900">
-                            {cat.name}
-                          </Link>
+                          <div key={cat.id}>
+                            <Link href={`/products?category=${cat.slug}`} className="block px-4 py-2 text-sm text-gray-600 hover:bg-gray-50 hover:text-gray-900">
+                              {cat.name}
+                            </Link>
+                            {cat.children && cat.children.length > 0 && (
+                              <div className="pb-1">
+                                {cat.children.map((child) => (
+                                  <Link key={child.id} href={`/products?category=${child.slug}`} className="block pl-7 pr-4 py-1.5 text-xs text-gray-500 hover:bg-gray-50 hover:text-gray-900">
+                                    {child.name}
+                                  </Link>
+                                ))}
+                              </div>
+                            )}
+                          </div>
                         ))}
                       </div>
                     </div>
