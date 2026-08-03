@@ -20,6 +20,10 @@ import { Locale } from '../lib/locales'
 import { getStoreHealth } from './storeHealth'
 import { MarketAvailability } from '../suppliers/types'
 import { computeMarketDeviation, buildDeliveryNote } from '../suppliers/marketDeviation'
+import { listConfigurableSuppliers, CONFIGURABLE_SUPPLIERS } from '../suppliers/configurableRegistry'
+import { ConfigurableSupplierKey } from '../suppliers/configurableTypes'
+import { listComplianceProfiles, getProfileDefinition } from '../lib/complianceProfiles'
+import { Prisma } from '@prisma/client'
 
 const MODEL = 'claude-sonnet-5'
 const MAX_TURNS = 8
@@ -586,6 +590,55 @@ const TOOLS: Anthropic.Tool[] = [
     description: 'Get the store\'s readiness/SEO health report: overall 0-100 score, per-category breakdown (store SEO, product SEO, category content, site infrastructure, content completeness), and the specific failing checks with counts and affected item names. Use this to tell the merchant what to fix before launch.',
     input_schema: { type: 'object', properties: {} },
   },
+
+  // Per-store supplier integrations
+  {
+    name: 'list_available_suppliers',
+    description: 'List the suppliers this store can connect (Printful, Gelato, BigBuy, and a generic WooCommerce Bridge for any supplier that has no API of its own but runs a WooCommerce store), with what each one can do and whether it is already enabled and fully configured for this store. Read-only. Use this when the owner asks how to add a supplier, where products can be sourced from, or why a supplier isn\'t available. Note that CJ Dropshipping and AliExpress are NOT in this list — they are configured globally at the platform level, not per store.',
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'get_supplier_capabilities',
+    description: 'Get one supplier\'s detail: what it can do (catalog search, product import, automatic order submission, tracking, webhooks), and exactly which settings it needs before it can be enabled. Use this before walking the owner through connecting a supplier, so you ask for the right credentials.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        supplierKey: { type: 'string', enum: ['PRINTFUL', 'GELATO', 'BIGBUY', 'WOO_BRIDGE'] },
+      },
+      required: ['supplierKey'],
+    },
+  },
+  {
+    name: 'enable_supplier',
+    description: 'Enable a supplier for this store and save its credentials. Only call this once the owner has actually given you the values — never invent an API key. The supplier cannot be enabled until every required setting is present (call get_supplier_capabilities first to see which). Settings are stored securely and are never readable back in full afterwards. You can also call this with enabled: false to switch a supplier off without deleting its settings.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        supplierKey: { type: 'string', enum: ['PRINTFUL', 'GELATO', 'BIGBUY', 'WOO_BRIDGE'] },
+        enabled: { type: 'boolean', description: 'Defaults to true.' },
+        settings: {
+          type: 'object',
+          description: 'Key/value credentials and config, using the exact setting names from get_supplier_capabilities (e.g. apiToken, apiKey, baseUrl, consumerKey, consumerSecret).',
+          additionalProperties: { type: 'string' },
+        },
+      },
+      required: ['supplierKey'],
+    },
+  },
+  {
+    name: 'get_compliance_requirements',
+    description: 'List the disclosure fields a compliance profile requires before a product in it can be published — e.g. ELECTRONICS needs CE marking, voltage rating and a WEEE number; TOYS_CHILDREN needs a minimum age and choking-hazard warning. Call with no profile to see every profile. Use this when the owner asks why a product won\'t publish, or what information they need to gather for a category. A product inherits its category\'s profile unless it sets its own.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        profile: {
+          type: 'string',
+          enum: ['COSMETICS', 'ELECTRONICS', 'TOYS_CHILDREN', 'FOOD_CONTACT', 'TEXTILE'],
+          description: 'Omit to list all profiles.',
+        },
+      },
+    },
+  },
 ]
 
 // ── System prompt ────────────────────────────────────────────────────────
@@ -613,6 +666,8 @@ Guidelines:
 - You have no ability to edit or delete customer records (email, name, phone, address) — this genuinely doesn't exist as a capability, not a restriction you're working around. If asked, say so plainly and suggest checking whether the admin panel has added this since.
 - You can translate products, categories, store content pages, and theme UI text into French, German, Italian, or Spanish (translate_product, translate_category, translate_store_content, translate_theme). English is the base language and lives in the main fields already — never pass "en" as a targetLocale, and never translate something that has no English content yet (write it in English first). Each translate_* call generates AND saves the translation for that one locale in one step — it doesn't touch other locales. If the user wants a full storefront translated, translate the store content pages, then loop through their categories and products, then the active theme.
 - When asked what needs shipping, what's stuck, or for a fulfillment status check, use list_pending_fulfillments (and get_fulfillment_details for one parcel) rather than paging through list_orders — it's the same cross-order queue the admin panel's Fulfillment Queue page shows. ERROR parcels for CJ/AliExpress retry automatically on a backoff schedule; only suggest fulfill_order_with_supplier for one that's stopped retrying (attempts exhausted) or ask the owner if they want to force it sooner.
+- Beyond CJ and AliExpress (configured platform-wide), this store can connect its own suppliers — use list_available_suppliers / get_supplier_capabilities / enable_supplier. Never invent or guess an API key: ask the owner for the exact values, and if they don't have an account yet, say what they need to sign up for. The "Custom WooCommerce Bridge" is the answer whenever a supplier has no API of its own but runs a WooCommerce store.
+- If a product refuses to go ACTIVE with a compliance error, that's a real legal-disclosure gate, not a bug: call get_compliance_requirements to see exactly which fields are missing and ask the owner for them. Don't fill compliance fields in with plausible-sounding text you made up — a wrong ingredient list or safety warning is worse than a missing one.
 - Stay within the tools you have. If asked for something outside this scope (e.g. writing marketing emails, changing code), say so plainly and suggest they do it elsewhere in the admin panel.`
 }
 
@@ -1362,6 +1417,135 @@ export async function runTool(storeId: string, name: string, input: any): Promis
     case 'get_store_health': {
       const report = await getStoreHealth(storeId)
       return { result: { report }, action: { tool: name, summary: `Checked store health — score ${report.overallScore}/100` } }
+    }
+
+    // Per-store supplier integrations
+    case 'list_available_suppliers': {
+      const rows = await prisma.storeSupplier.findMany({ where: { storeId } })
+      const byKey = new Map(rows.map((r) => [r.supplierKey as string, r]))
+      const suppliers = listConfigurableSuppliers().map((meta) => {
+        const row = byKey.get(meta.key)
+        const settings = (row?.settings ?? {}) as Record<string, string>
+        const missingRequired = meta.settingFields
+          .filter((f) => f.required && !String(settings[f.name] ?? '').trim())
+          .map((f) => f.label)
+        return {
+          key: meta.key,
+          displayName: meta.displayName,
+          description: meta.description,
+          capabilities: meta.capabilities,
+          enabled: row?.enabled ?? false,
+          configured: missingRequired.length === 0,
+          missingRequired,
+        }
+      })
+      const enabledCount = suppliers.filter((s) => s.enabled).length
+      return {
+        result: { suppliers },
+        action: { tool: name, summary: `Listed connectable suppliers — ${enabledCount} of ${suppliers.length} enabled` },
+      }
+    }
+
+    case 'get_supplier_capabilities': {
+      const key = input.supplierKey as ConfigurableSupplierKey
+      const meta = CONFIGURABLE_SUPPLIERS[key]
+      if (!meta) throw new Error(`Unknown supplier: ${input.supplierKey}`)
+      const row = await prisma.storeSupplier.findUnique({
+        where: { storeId_supplierKey: { storeId, supplierKey: key } },
+      })
+      const settings = (row?.settings ?? {}) as Record<string, string>
+      return {
+        result: {
+          key: meta.key,
+          displayName: meta.displayName,
+          description: meta.description,
+          docsUrl: meta.docsUrl,
+          capabilities: meta.capabilities,
+          // Which settings exist and whether each is already filled in — never the values
+          // themselves, secret or not.
+          settingFields: meta.settingFields.map((f) => ({
+            name: f.name,
+            label: f.label,
+            help: f.help,
+            required: f.required,
+            secret: f.secret,
+            isSet: Boolean(String(settings[f.name] ?? '').trim()),
+          })),
+          enabled: row?.enabled ?? false,
+        },
+        action: { tool: name, summary: `Looked up ${meta.displayName} integration details` },
+      }
+    }
+
+    case 'enable_supplier': {
+      const key = input.supplierKey as ConfigurableSupplierKey
+      const meta = CONFIGURABLE_SUPPLIERS[key]
+      if (!meta) throw new Error(`Unknown supplier: ${input.supplierKey}`)
+      const enabled = input.enabled !== false
+
+      const existing = await prisma.storeSupplier.findUnique({
+        where: { storeId_supplierKey: { storeId, supplierKey: key } },
+      })
+      const merged: Record<string, string> = { ...((existing?.settings ?? {}) as Record<string, string>) }
+      const allowed = new Set(meta.settingFields.map((f) => f.name))
+      const rejected: string[] = []
+      for (const [k, v] of Object.entries((input.settings ?? {}) as Record<string, unknown>)) {
+        if (!allowed.has(k)) { rejected.push(k); continue }
+        if (typeof v !== 'string') continue
+        if (v === '') delete merged[k]
+        else merged[k] = v
+      }
+
+      if (enabled) {
+        const missing = meta.settingFields.filter((f) => f.required && !String(merged[f.name] ?? '').trim())
+        if (missing.length > 0) {
+          throw new Error(
+            `${meta.displayName} can't be enabled yet — still missing: ${missing.map((f) => f.label).join(', ')}. Ask the owner for these before calling again.`
+          )
+        }
+      }
+
+      const saved = await prisma.storeSupplier.upsert({
+        where: { storeId_supplierKey: { storeId, supplierKey: key } },
+        create: { storeId, supplierKey: key, enabled, settings: merged as Prisma.InputJsonValue },
+        update: { enabled, settings: merged as Prisma.InputJsonValue },
+      })
+
+      return {
+        result: {
+          key: saved.supplierKey,
+          enabled: saved.enabled,
+          // Echo back which setting names are now populated, never their values.
+          settingsSet: Object.keys(merged),
+          ignoredSettings: rejected,
+        },
+        action: {
+          tool: name,
+          summary: `${enabled ? 'Enabled' : 'Disabled'} ${meta.displayName} for this store`,
+        },
+      }
+    }
+
+    case 'get_compliance_requirements': {
+      const profiles = input.profile
+        ? [getProfileDefinition(input.profile)].filter(Boolean)
+        : listComplianceProfiles()
+      if (profiles.length === 0) throw new Error(`Unknown compliance profile: ${input.profile}`)
+      return {
+        result: {
+          profiles: profiles.map((p) => ({
+            key: p!.key,
+            label: p!.label,
+            description: p!.description,
+            requiredFields: p!.fields.map((f) => ({ key: f.key, label: f.label, help: f.help })),
+          })),
+          note: 'A product cannot be set ACTIVE until every required field for its resolved profile is filled in. A product inherits its category\'s profile unless it sets its own.',
+        },
+        action: {
+          tool: name,
+          summary: input.profile ? `Listed ${input.profile} compliance requirements` : 'Listed all compliance profiles',
+        },
+      }
     }
 
     default:

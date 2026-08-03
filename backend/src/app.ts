@@ -101,6 +101,7 @@ import storeReviewRoutes from './routes/store/reviews'
 import adminSetupAssistantRoutes from './routes/admin/setupAssistant'
 import adminStoreHealthRoutes from './routes/admin/storeHealth'
 import adminFulfillmentQueueRoutes from './routes/admin/fulfillmentQueue'
+import adminStoreSupplierRoutes from './routes/admin/storeSuppliers'
 
 app.use('/api/admin/discounts', adminDiscountRoutes)
 app.use('/api/admin/shipping', adminShippingRoutes)
@@ -121,6 +122,7 @@ app.use('/api/store/reviews', storeReviewRoutes)
 app.use('/api/admin/setup-assistant', adminSetupAssistantRoutes)
 app.use('/api/admin/store-health', adminStoreHealthRoutes)
 app.use('/api/admin/fulfillment-queue', adminFulfillmentQueueRoutes)
+app.use('/api/admin/store-suppliers', adminStoreSupplierRoutes)
 
 app.use(errorHandler)
 export default app
