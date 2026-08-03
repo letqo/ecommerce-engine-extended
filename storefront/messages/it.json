@@ -1,5 +1,8 @@
 {
-  "header": { "shop": "Negozio", "allProducts": "Tutti i prodotti" },
+  "header": {
+    "shop": "Negozio",
+    "allProducts": "Tutti i prodotti"
+  },
   "footer": {
     "tagline": "Prodotti di qualità consegnati rapidamente.",
     "shop": "Negozio",
@@ -62,7 +65,8 @@
     "share": "Condividi",
     "copyLink": "Copia link",
     "delivery": "Consegna stimata",
-    "deliveryEstimateNote": "Questa è una stima generale. Il tempo di consegna esatto verrà mostrato al momento del pagamento, in base al tuo indirizzo."
+    "deliveryEstimateNote": "Questa è una stima generale. Il tempo di consegna esatto verrà mostrato al momento del pagamento, in base al tuo indirizzo.",
+    "complianceHeading": "Informazioni su conformità e sicurezza"
   },
   "wishlist": {
     "title": "I miei preferiti",

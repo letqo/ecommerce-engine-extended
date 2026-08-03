@@ -1,5 +1,8 @@
 {
-  "header": { "shop": "Boutique", "allProducts": "Tous les produits" },
+  "header": {
+    "shop": "Boutique",
+    "allProducts": "Tous les produits"
+  },
   "footer": {
     "tagline": "Des produits de qualité livrés rapidement.",
     "shop": "Boutique",
@@ -62,7 +65,8 @@
     "share": "Partager",
     "copyLink": "Copier le lien",
     "delivery": "Livraison estimée",
-    "deliveryEstimateNote": "Il s'agit d'une estimation générale. Votre délai de livraison exact s'affichera au moment du paiement, en fonction de votre adresse."
+    "deliveryEstimateNote": "Il s'agit d'une estimation générale. Votre délai de livraison exact s'affichera au moment du paiement, en fonction de votre adresse.",
+    "complianceHeading": "Informations de conformité et de sécurité"
   },
   "wishlist": {
     "title": "Mes favoris",

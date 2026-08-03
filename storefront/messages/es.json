@@ -1,5 +1,8 @@
 {
-  "header": { "shop": "Tienda", "allProducts": "Todos los productos" },
+  "header": {
+    "shop": "Tienda",
+    "allProducts": "Todos los productos"
+  },
   "footer": {
     "tagline": "Productos de calidad entregados rápido.",
     "shop": "Tienda",
@@ -62,7 +65,8 @@
     "share": "Compartir",
     "copyLink": "Copiar enlace",
     "delivery": "Entrega estimada",
-    "deliveryEstimateNote": "Esta es una estimación general. Tu tiempo de entrega exacto se mostrará al finalizar la compra, según tu dirección."
+    "deliveryEstimateNote": "Esta es una estimación general. Tu tiempo de entrega exacto se mostrará al finalizar la compra, según tu dirección.",
+    "complianceHeading": "Información de conformidad y seguridad"
   },
   "wishlist": {
     "title": "Mi lista de deseos",

@@ -1,5 +1,8 @@
 {
-  "header": { "shop": "Shop", "allProducts": "All Products" },
+  "header": {
+    "shop": "Shop",
+    "allProducts": "All Products"
+  },
   "footer": {
     "tagline": "Quality products delivered fast.",
     "shop": "Shop",
@@ -62,7 +65,8 @@
     "share": "Share",
     "copyLink": "Copy link",
     "delivery": "Estimated delivery",
-    "deliveryEstimateNote": "This is a general estimate. Your exact delivery time will be shown at checkout, based on your address."
+    "deliveryEstimateNote": "This is a general estimate. Your exact delivery time will be shown at checkout, based on your address.",
+    "complianceHeading": "Compliance & safety information"
   },
   "wishlist": {
     "title": "My Wishlist",

@@ -43,6 +43,10 @@ interface Product {
   deliveryMinDays?: number | null
   deliveryMaxDays?: number | null
   category?: { name: string; slug: string } | null
+  // Resolved server-side from the product's (or its category's) compliance profile — the
+  // storefront just renders whatever label/value pairs it's given, so a new profile needs no
+  // change here. Null when no profile applies.
+  compliance?: { profile: string; fields: { key: string; label: string; value: unknown }[] } | null
 }
 
 type DetailLayout = 'side-by-side' | 'stacked' | 'gallery-sticky'
@@ -343,6 +347,23 @@ function ProductDetailInner() {
         {imageSection}
         {infoSection}
       </div>
+
+      {product.compliance && product.compliance.fields.length > 0 && (
+        <section
+          data-theme-section="product-compliance"
+          className="theme-product-compliance mt-12 border-t border-gray-200 pt-8"
+        >
+          <h2 className="text-lg font-semibold mb-4">{t('complianceHeading')}</h2>
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-4">
+            {product.compliance.fields.map((f) => (
+              <div key={f.key}>
+                <dt className="text-xs uppercase tracking-wide text-gray-500 mb-1">{f.label}</dt>
+                <dd className="text-sm text-gray-700 whitespace-pre-line">{String(f.value)}</dd>
+              </div>
+            ))}
+          </dl>
+        </section>
+      )}
 
       <ReviewSection productId={product.id} />
       <RelatedProducts slug={product.slug} />

@@ -1,5 +1,8 @@
 {
-  "header": { "shop": "Shop", "allProducts": "Alle Produkte" },
+  "header": {
+    "shop": "Shop",
+    "allProducts": "Alle Produkte"
+  },
   "footer": {
     "tagline": "Qualitätsprodukte schnell geliefert.",
     "shop": "Shop",
@@ -62,7 +65,8 @@
     "share": "Teilen",
     "copyLink": "Link kopieren",
     "delivery": "Voraussichtliche Lieferung",
-    "deliveryEstimateNote": "Dies ist eine allgemeine Schätzung. Ihre genaue Lieferzeit wird an der Kasse basierend auf Ihrer Adresse angezeigt."
+    "deliveryEstimateNote": "Dies ist eine allgemeine Schätzung. Ihre genaue Lieferzeit wird an der Kasse basierend auf Ihrer Adresse angezeigt.",
+    "complianceHeading": "Konformitäts- und Sicherheitshinweise"
   },
   "wishlist": {
     "title": "Meine Wunschliste",
