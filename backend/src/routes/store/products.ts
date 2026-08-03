@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express'
 import { prisma } from '../../config/database'
 import { createError } from '../../middleware/errorHandler'
 import { applyProductTranslation, applyCategoryTranslation, translationsSelect } from '../../lib/translate'
+import { resolveComplianceProfile, getRequiredFields } from '../../lib/complianceProfiles'
 
 function mergeProduct(p: any, locale?: string) {
   const merged = applyProductTranslation(p, locale) as any
@@ -157,13 +158,30 @@ router.get('/:slug', async (req: Request, res: Response, next: NextFunction) => 
           },
         },
         options: { include: { values: true }, orderBy: { sortOrder: 'asc' } },
-        category: { select: { name: true, slug: true, ...translationsSelect(locale) } },
+        category: { select: { name: true, slug: true, complianceProfile: true, ...translationsSelect(locale) } },
+        complianceProfile: true,
+        complianceData: true,
         ...translationsSelect(locale),
       },
     })
 
     if (!product || product.status !== 'ACTIVE') throw createError('Product not found', 404, 'NOT_FOUND')
-    res.json({ success: true, data: mergeProduct(product, locale) })
+
+    // Resolve the profile server-side and hand the storefront a flat, ready-to-render list, so
+    // the compliance registry stays in one place instead of being duplicated in the frontend.
+    const profile = resolveComplianceProfile(product.complianceProfile, product.category?.complianceProfile)
+    const data = (product.complianceData ?? {}) as Record<string, unknown>
+    const compliance =
+      profile === 'NONE'
+        ? null
+        : {
+            profile,
+            fields: getRequiredFields(profile)
+              .map((f) => ({ key: f.key, label: f.label, value: data[f.key] }))
+              .filter((f) => f.value !== null && f.value !== undefined && String(f.value).trim() !== ''),
+          }
+
+    res.json({ success: true, data: { ...mergeProduct(product, locale), compliance } })
   } catch (err) { next(err) }
 })
 

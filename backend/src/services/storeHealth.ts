@@ -1,5 +1,6 @@
 import { prisma } from '../config/database'
 import { env } from '../config/env'
+import { resolveComplianceProfile, findMissingComplianceFields } from '../lib/complianceProfiles'
 
 export type HealthCategoryId =
   | 'store_seo'
@@ -311,6 +312,52 @@ async function checkInfrastructure(storeId: string): Promise<HealthCheckResult[]
   ]
 }
 
+// Live products whose compliance profile still has empty required fields. The product API
+// blocks publishing in that state, so this normally passes — it catches products that went
+// ACTIVE before a profile was assigned, or whose category profile changed underneath them
+// (assigning ELECTRONICS to an existing category retroactively puts every live product in it
+// out of compliance). Critical, so it caps the overall score at 59 the same way an
+// unconfigured payment or shipping setup does: in both cases the store shouldn't be selling.
+async function checkCompliance(storeId: string): Promise<HealthCheckResult[]> {
+  const products = await prisma.product.findMany({
+    where: { storeId, status: 'ACTIVE' },
+    select: {
+      id: true,
+      title: true,
+      complianceProfile: true,
+      complianceData: true,
+      category: { select: { complianceProfile: true } },
+    },
+  })
+
+  const nonCompliant: { id: string; name: string }[] = []
+  let inScope = 0
+  for (const p of products) {
+    const profile = resolveComplianceProfile(p.complianceProfile, p.category?.complianceProfile)
+    if (profile === 'NONE') continue
+    inScope++
+    if (findMissingComplianceFields(profile, p.complianceData).length > 0) {
+      nonCompliant.push({ id: p.id, name: p.title })
+    }
+  }
+
+  return [
+    check({
+      id: 'product_compliance_complete',
+      category: 'content_completeness',
+      label: 'Product compliance information',
+      severity: 'critical',
+      totalCount: inScope,
+      affected: nonCompliant,
+      passMessage:
+        inScope === 0
+          ? 'No live products require compliance information.'
+          : `All ${inScope} live products that require compliance information have it.`,
+      failMessage: `${nonCompliant.length} of ${inScope} live products are missing required compliance information and should be unpublished until it is filled in.`,
+    }),
+  ]
+}
+
 async function checkContentCompleteness(storeId: string): Promise<HealthCheckResult[]> {
   const store = await prisma.store.findUnique({
     where: { id: storeId },
@@ -417,12 +464,13 @@ function rollUpCategory(category: HealthCategoryId, checks: HealthCheckResult[])
 }
 
 export async function getStoreHealth(storeId: string): Promise<StoreHealthReport> {
-  const [storeSeo, productSeo, categoryContent, infrastructure, contentCompleteness] = await Promise.all([
+  const [storeSeo, productSeo, categoryContent, infrastructure, contentCompleteness, compliance] = await Promise.all([
     checkStoreSeo(storeId),
     checkProductSeo(storeId),
     checkCategoryContent(storeId),
     checkInfrastructure(storeId),
     checkContentCompleteness(storeId),
+    checkCompliance(storeId),
   ])
 
   const categories: HealthCategoryResult[] = [
@@ -430,7 +478,10 @@ export async function getStoreHealth(storeId: string): Promise<StoreHealthReport
     rollUpCategory('product_seo', productSeo),
     rollUpCategory('category_content', categoryContent),
     rollUpCategory('infrastructure', infrastructure),
-    rollUpCategory('content_completeness', contentCompleteness),
+    // Compliance rides in the content-completeness bucket rather than getting its own weighted
+    // category — it is "required content that is missing", and a new category would silently
+    // re-weight every existing store's score.
+    rollUpCategory('content_completeness', [...contentCompleteness, ...compliance]),
   ]
 
   const totalWeight = categories.reduce((sum, c) => sum + c.weight, 0)

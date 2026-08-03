@@ -15,6 +15,9 @@ export const categorySchema = z.object({
   parentId: z.string().optional(),
   sortOrder: z.number().optional(),
   isVisible: z.boolean().optional(),
+  // Every product in this category inherits this profile unless it sets its own. Changing it
+  // can put already-live products out of compliance — the Store Health audit surfaces that.
+  complianceProfile: z.enum(['NONE', 'COSMETICS', 'ELECTRONICS', 'TOYS_CHILDREN', 'FOOD_CONTACT', 'TEXTILE']).optional(),
   translations: z.array(z.object({
     locale: z.enum(LOCALES),
     name: z.string().optional().nullable(),
