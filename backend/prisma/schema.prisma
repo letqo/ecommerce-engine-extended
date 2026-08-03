@@ -74,6 +74,7 @@ model Store {
   reviews          Review[]
   setupAssistantSession SetupAssistantSession?
   translations     StoreTranslation[]
+  suppliers        StoreSupplier[]
 }
 
 model SetupAssistantSession {
@@ -165,6 +166,9 @@ model Category {
   products    Product[]
   sortOrder   Int        @default(0)
   isVisible   Boolean    @default(true)
+  // Regulatory profile inherited by every product in this category unless the product
+  // overrides it. NONE means no extra required fields.
+  complianceProfile ComplianceProfile @default(NONE)
   translations CategoryTranslation[]
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
@@ -224,6 +228,15 @@ model Product {
   // delivery: ~60 days") or a big swing in delivery time/cost between target markets — same
   // "not rechecked automatically" caveat as unavailableMarkets above.
   deliveryNote             String?
+  // Which configurable supplier (PRINTFUL/GELATO/BIGBUY/WOO_BRIDGE) sources this product.
+  // CJ and AliExpress keep using their own dedicated columns above — this field is only for
+  // suppliers added after them, and is what classifySupplier() reads to route a parcel.
+  supplierKey              SupplierKey?
+  // Null = inherit the category's profile. Set to override it (including to NONE).
+  complianceProfile        ComplianceProfile?
+  // Free-form key/value bag holding whatever fields the resolved profile requires — see
+  // backend/src/lib/complianceProfiles.ts for the per-profile field registry.
+  complianceData           Json?
   reviews                  Review[]
   translations             ProductTranslation[]
   createdAt                DateTime         @default(now())
@@ -256,6 +269,18 @@ enum ProductStatus {
   DRAFT
   ACTIVE
   ARCHIVED
+}
+
+// Regulatory/marketplace disclosure profiles. Each non-NONE value maps to a set of required
+// fields in backend/src/lib/complianceProfiles.ts; a product cannot go ACTIVE until every
+// required field for its resolved profile is filled in on Product.complianceData.
+enum ComplianceProfile {
+  NONE
+  COSMETICS
+  ELECTRONICS
+  TOYS_CHILDREN
+  FOOD_CONTACT
+  TEXTILE
 }
 
 model ProductImage {
@@ -304,6 +329,10 @@ model ProductVariant {
   cjVariantId        String?
   aliexpressSkuId    String?
   aliexpressSkuAttr  String?
+  // Generic per-variant supplier identifier for configurable suppliers (Printful variant id,
+  // Gelato product uid, BigBuy product id, Woo product id, ...). Paired with
+  // Product.supplierKey, which says which supplier this ref belongs to.
+  supplierVariantRef String?
   orderItems     OrderItem[]
   cartItems      CartItem[]
   createdAt      DateTime    @default(now())
@@ -488,6 +517,32 @@ enum SupplierKey {
   CJ
   ALIEXPRESS
   MANUAL
+  // Configurable, per-store suppliers (credentials live on StoreSupplier.settings, not env).
+  PRINTFUL
+  GELATO
+  BIGBUY
+  // Generic bridge for any supplier with no public API but a WooCommerce-pluggable backend.
+  WOO_BRIDGE
+}
+
+// Per-store enablement + credentials for a configurable supplier. CJ/ALIEXPRESS still read
+// their credentials from process env (one shared business account); every supplier added
+// after them is configured per store, because different stores on this platform will have
+// their own Printful/Gelato/BigBuy/Woo accounts.
+model StoreSupplier {
+  id          String      @id @default(uuid())
+  storeId     String
+  store       Store       @relation(fields: [storeId], references: [id])
+  supplierKey SupplierKey
+  enabled     Boolean     @default(false)
+  // Adapter-specific config: API keys, base URLs, webhook secrets. Secret-shaped keys are
+  // redacted by the admin GET route — never return this verbatim to a client.
+  settings    Json?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@unique([storeId, supplierKey])
+  @@index([storeId, enabled])
 }
 
 enum SupplierOrderStatus {
