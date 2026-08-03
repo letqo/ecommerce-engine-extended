@@ -59,7 +59,9 @@ runtime or data with the original store.
 
 ## 6. Go live
 
-- [ ] Custom domain (deferrable — launch on the free Railway/Vercel subdomains first, same as precisie.eu did)
-- [ ] Switch Stripe to live keys
+- [x] Stripe webhook endpoint created and `STRIPE_WEBHOOK_SECRET` set (2026-08-03) — before this, `payment_intent.succeeded`/`payment_intent.payment_failed` events were rejected outright (empty signing secret never matches), so paid orders never actually flipped to `CONFIRMED`/`PAID`. Fixed by creating a real test-mode webhook endpoint via the Stripe API and setting the returned secret on Railway.
+- [x] `EMAIL_FROM_NAME` set to `STILL` (2026-08-03) — was defaulting to the generic `Store`. `EMAIL_FROM` address is still `noreply@precisie.eu` (the shared Resend account's only verified domain) — fix once STILL has its own custom domain, see the item below.
+- [ ] Custom domain (deferrable — launch on the free Railway/Vercel subdomains first, same as precisie.eu did) — also blocks fixing `EMAIL_FROM` to a real STILL address, since Resend requires domain verification to send from it
+- [ ] Switch Stripe to live keys (create a **second**, live-mode webhook endpoint when this happens — the one just created is test-mode only)
 - [ ] Resend sending domain verified
 - [ ] End-to-end dry run: place a real order to your own address, work it through §5, confirm the shipping email and `/track-order` page
