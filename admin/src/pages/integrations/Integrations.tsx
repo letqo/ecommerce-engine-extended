@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Check, Loader2, Eye, EyeOff, ExternalLink } from 'lucide-react'
+import StoreSuppliers from './StoreSuppliers'
 
 const ALIEXPRESS_APP_KEY = '537274'
 const ALIEXPRESS_OAUTH_URL =
@@ -263,6 +264,16 @@ export default function Integrations() {
           )}
         </CardContent>
       </Card>
+
+      {/* Per-store suppliers. CJ and AliExpress above are configured once for the whole
+          platform; everything below is this store's own account with that supplier. */}
+      <div className="pt-2">
+        <h2 className="text-lg font-semibold mb-1">Your store's suppliers</h2>
+        <p className="text-muted-foreground text-sm mb-4">
+          Connect suppliers using your own accounts. Each store on this platform keeps its own credentials.
+        </p>
+      </div>
+      <StoreSuppliers />
     </div>
   )
 }

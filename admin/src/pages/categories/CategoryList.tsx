@@ -24,6 +24,7 @@ interface Category {
   parentId: string | null
   sortOrder: number
   isVisible: boolean
+  complianceProfile?: string
   _count: { products: number }
   translations?: CategoryTranslation[]
 }
@@ -41,12 +42,19 @@ interface FormState {
   imageUrl: string
   parentId: string
   isVisible: boolean
+  complianceProfile: string
   translations: TranslationSlot[]
+}
+
+interface ComplianceProfileDef {
+  key: string
+  label: string
+  description: string
 }
 
 const emptyTranslations = (): TranslationSlot[] => LOCALE_CODES.map((locale) => ({ locale, name: '', description: '' }))
 
-const emptyForm: FormState = { name: '', slug: '', description: '', imageUrl: '', parentId: '', isVisible: true, translations: emptyTranslations() }
+const emptyForm: FormState = { name: '', slug: '', description: '', imageUrl: '', parentId: '', isVisible: true, complianceProfile: 'NONE', translations: emptyTranslations() }
 
 export default function CategoryList() {
   const [categories, setCategories] = useState<Category[]>([])
@@ -63,6 +71,8 @@ export default function CategoryList() {
   const [studioOpen, setStudioOpen] = useState(false)
   const imageInputRef = useRef<HTMLInputElement>(null)
   const [visibility, setVisibility] = useState('ALL')
+  // Compliance profile registry, read from the backend so the list lives in one place.
+  const [complianceProfiles, setComplianceProfiles] = useState<ComplianceProfileDef[]>([])
 
   const load = async () => {
     setLoading(true)
@@ -73,7 +83,10 @@ export default function CategoryList() {
     setLoading(false)
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    api.get('/api/admin/compliance-profiles').then((r) => setComplianceProfiles(r.data.data)).catch(() => {})
+  }, [])
 
   const openCreate = () => {
     setEditingId(null)
@@ -97,6 +110,7 @@ export default function CategoryList() {
       imageUrl: cat.imageUrl ?? '',
       parentId: cat.parentId ?? '',
       isVisible: cat.isVisible,
+      complianceProfile: cat.complianceProfile ?? 'NONE',
       translations,
     })
     setError('')
@@ -150,6 +164,7 @@ export default function CategoryList() {
         imageUrl: form.imageUrl.trim() || undefined,
         parentId: form.parentId || undefined,
         isVisible: form.isVisible,
+        complianceProfile: form.complianceProfile,
         translations: form.translations.filter((t) => t.name.trim() || t.description.trim()),
       }
       if (form.slug.trim()) payload.slug = form.slug.trim()
@@ -348,6 +363,28 @@ export default function CategoryList() {
                 ))}
               </select>
             </div>
+          </div>
+
+          {/* Every product in this category inherits this profile unless it overrides it.
+              Options come from the backend registry, so new profiles appear on their own. */}
+          <div>
+            <Label>Compliance Profile</Label>
+            <select
+              value={form.complianceProfile}
+              onChange={(e) => setForm({ ...form, complianceProfile: e.target.value })}
+              className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm"
+            >
+              <option value="NONE">None — no disclosures required</option>
+              {complianceProfiles.map((p) => (
+                <option key={p.key} value={p.key}>{p.label}</option>
+              ))}
+            </select>
+            <p className="text-xs text-muted-foreground mt-1">
+              {complianceProfiles.find((p) => p.key === form.complianceProfile)?.description ??
+                'Products in this category need no extra disclosures before publishing.'}
+              {form.complianceProfile !== 'NONE' &&
+                ' Products already published in this category that lack these details will be flagged in Store Health.'}
+            </p>
           </div>
 
           <div className="flex items-center gap-2">

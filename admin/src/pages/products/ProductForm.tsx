@@ -43,6 +43,9 @@ const schema = z.object({
   metaDescription: z.string().optional().nullable(),
   isFeatured: z.boolean().default(false),
   listVariantsIndividually: z.boolean().default(false),
+  // '' means "inherit the category's profile"; an explicit value overrides it.
+  complianceProfile: z.string().optional().nullable(),
+  complianceData: z.record(z.string()).default({}),
   images: z.array(z.object({ url: z.string().url('Invalid URL'), altText: z.string().optional().nullable(), sortOrder: z.number().default(0) })).default([]),
   variants: z.array(variantSchema).min(1, 'At least one variant required'),
   translations: z.array(z.object({
@@ -56,6 +59,13 @@ const schema = z.object({
 })
 
 type FormData = z.infer<typeof schema>
+
+interface ComplianceProfileDef {
+  key: string
+  label: string
+  description: string
+  fields: { key: string; label: string; help?: string; multiline?: boolean }[]
+}
 
 export default function ProductForm() {
   const { id } = useParams()
@@ -75,10 +85,13 @@ export default function ProductForm() {
   const [unavailableMarkets, setUnavailableMarkets] = useState<string[]>([])
   const [deliveryNote, setDeliveryNote] = useState<string | null>(null)
   const [importedAt, setImportedAt] = useState<string | null>(null)
+  // Compliance profile registry, fetched from the backend so the field list lives in exactly
+  // one place (backend/src/lib/complianceProfiles.ts) rather than being mirrored here.
+  const [complianceProfiles, setComplianceProfiles] = useState<ComplianceProfileDef[]>([])
 
   const emptyTranslations = () => LOCALE_CODES.map((locale) => ({ locale, title: '', shortDescription: '', description: '', metaTitle: '', metaDescription: '' }))
 
-  const { register, handleSubmit, control, reset, setValue, getValues, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, control, reset, setValue, getValues, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
     defaultValues: { status: 'DRAFT', isFeatured: false, listVariantsIndividually: false, variants: [{ title: 'Default', price: 0, inventoryQty: 0, isDefault: true, options: {} }], images: [], translations: emptyTranslations() },
   })
@@ -87,8 +100,18 @@ export default function ProductForm() {
   const { fields: imageFields, append: addImage, remove: removeImage } = useFieldArray({ control, name: 'images' })
   const { fields: translationFields } = useFieldArray({ control, name: 'translations' })
 
+  // Same resolution rule the backend uses: the product's own profile wins, otherwise it
+  // inherits its category's. Recomputed live so picking a category immediately reveals the
+  // compliance fields that category demands.
+  const selectedProfile = watch('complianceProfile')
+  const selectedCategoryId = watch('categoryId')
+  const inheritedProfileKey = categories.find((c) => c.id === selectedCategoryId)?.complianceProfile as string | undefined
+  const effectiveProfileKey = selectedProfile || inheritedProfileKey || 'NONE'
+  const resolvedProfile = complianceProfiles.find((p) => p.key === effectiveProfileKey) ?? null
+
   useEffect(() => {
     api.get('/api/admin/categories').then((r) => setCategories(r.data.data))
+    api.get('/api/admin/compliance-profiles').then((r) => setComplianceProfiles(r.data.data)).catch(() => {})
     if (!isNew) {
       api.get(`/api/admin/products/${id}`).then((r) => {
         const p = r.data.data
@@ -106,6 +129,11 @@ export default function ProductForm() {
           ...p,
           tags: p.tags?.join(', ') || '',
           categoryId: p.categoryId || '',
+          complianceProfile: p.complianceProfile || '',
+          // Stored as JSON; coerced to strings so every field binds to a text input.
+          complianceData: Object.fromEntries(
+            Object.entries(p.complianceData ?? {}).map(([k, v]) => [k, v == null ? '' : String(v)])
+          ),
           variants: p.variants.map((v: any) => ({ ...v, compareAtPrice: v.compareAtPrice ?? '', costPerItem: v.costPerItem ?? '' })),
           translations,
         })
@@ -150,6 +178,12 @@ export default function ProductForm() {
         ...data,
         tags: data.tags ? data.tags.split(',').map((t) => t.trim()).filter(Boolean) : [],
         categoryId: data.categoryId || null,
+        // '' = inherit from category. Only send the keys the resolved profile actually asks
+        // for, so switching profile doesn't leave the old profile's answers behind.
+        complianceProfile: data.complianceProfile || null,
+        complianceData: Object.fromEntries(
+          (resolvedProfile?.fields ?? []).map((f) => [f.key, data.complianceData?.[f.key] ?? ''])
+        ),
         translations: data.translations.filter((t) => t.title || t.shortDescription || t.description || t.metaTitle || t.metaDescription),
       }
       if (isNew) {
@@ -534,6 +568,56 @@ export default function ProductForm() {
                   <input type="checkbox" id="listVariantsIndividually" {...register('listVariantsIndividually')} className="rounded" />
                   <Label htmlFor="listVariantsIndividually">List each variant as a separate product</Label>
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Compliance. Fields are rendered from the backend registry — nothing about any
+                specific profile is hardcoded here, so a new profile appears automatically. */}
+            <Card>
+              <CardHeader><CardTitle>Compliance</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-1.5">
+                  <Label>Profile</Label>
+                  <select
+                    className="w-full h-9 rounded-md border border-input bg-transparent px-3 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    {...register('complianceProfile')}
+                  >
+                    <option value="">
+                      {inheritedProfileKey && inheritedProfileKey !== 'NONE'
+                        ? `Inherit from category (${complianceProfiles.find((p) => p.key === inheritedProfileKey)?.label ?? inheritedProfileKey})`
+                        : 'Inherit from category (none)'}
+                    </option>
+                    <option value="NONE">None — no disclosures required</option>
+                    {complianceProfiles.map((p) => (
+                      <option key={p.key} value={p.key}>{p.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {resolvedProfile ? (
+                  <>
+                    <p className="text-xs text-muted-foreground">{resolvedProfile.description}</p>
+                    <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2.5 py-2">
+                      All of these are required before this product can be set Active.
+                    </p>
+                    {resolvedProfile.fields.map((f) => (
+                      <div key={f.key} className="space-y-1.5">
+                        <Label>{f.label}</Label>
+                        {f.multiline ? (
+                          <Textarea rows={3} {...register(`complianceData.${f.key}` as const)} />
+                        ) : (
+                          <Input {...register(`complianceData.${f.key}` as const)} />
+                        )}
+                        {f.help && <p className="text-xs text-muted-foreground">{f.help}</p>}
+                      </div>
+                    ))}
+                  </>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    No compliance disclosures are required for this product. Assign a profile here, or set one on its
+                    category to apply it to every product in that category.
+                  </p>
+                )}
               </CardContent>
             </Card>
 
