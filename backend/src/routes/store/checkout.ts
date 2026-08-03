@@ -113,7 +113,7 @@ router.post('/delivery-estimate', async (req: CustomerRequest, res: Response, ne
 
     const [estimate, parcelCount] = await Promise.all([
       estimateDeliveryForCountry(items, country.toUpperCase(), req.storeId),
-      previewParcelCount(items),
+      previewParcelCount(items, req.storeId),
     ])
     res.json({ success: true, data: { ...estimate, parcelCount } })
   } catch (err) { next(err) }

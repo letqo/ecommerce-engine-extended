@@ -7,18 +7,19 @@ interface RetryResult {
   stillFailing: number
 }
 
-// Picks up CJ/AliExpress parcels that failed submission and are due for their next
-// backoff attempt (1m/5m/30m/2h/12h, set by submitSupplierOrder). MANUAL parcels never
-// appear here — there's no API to retry against. Parcels that exhausted all attempts
-// have nextRetryAt cleared, so they naturally drop out of this query and wait for a
-// human via the Fulfillment Queue.
+// Picks up API-backed parcels that failed submission and are due for their next backoff
+// attempt (1m/5m/30m/2h/12h, set by submitSupplierOrder). MANUAL parcels never appear here —
+// there's no API to retry against. Parcels that exhausted all attempts have nextRetryAt
+// cleared, so they naturally drop out of this query and wait for a human via the Fulfillment
+// Queue.
 export async function runFulfillmentRetry(): Promise<RetryResult> {
   const result: RetryResult = { checked: 0, succeeded: 0, stillFailing: 0 }
 
   const due = await prisma.supplierOrder.findMany({
     where: {
       status: 'ERROR',
-      supplierKey: { in: ['CJ', 'ALIEXPRESS'] },
+      // Every supplier with an ordering API. MANUAL is the only key deliberately excluded.
+      supplierKey: { in: ['CJ', 'ALIEXPRESS', 'PRINTFUL', 'GELATO', 'BIGBUY', 'WOO_BRIDGE'] },
       attempts: { lt: MAX_AUTO_RETRY_ATTEMPTS },
       nextRetryAt: { lte: new Date() },
     },
