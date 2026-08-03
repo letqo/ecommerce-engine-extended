@@ -24,6 +24,7 @@ export interface NavItem {
 export interface HomeSection {
   type: string
   variant?: string
+  eyebrow?: string
   heading?: string
   text?: string
   cta?: { label: string; href: string }
@@ -43,7 +44,7 @@ export interface ThemeSections {
   productCard: 'default' | 'overlay' | 'detailed' | 'plate'
   cartLayout: 'sidebar' | 'bottom-bar'
   checkoutLayout: 'two-column' | 'single-column'
-  announcementBar?: { messages: string[]; speed?: number }
+  announcementBar?: { messages: string[]; speed?: number; variant?: 'marquee' | 'utility'; showClock?: boolean }
 }
 
 export const DEFAULT_SECTIONS: ThemeSections = {

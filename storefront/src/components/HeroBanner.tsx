@@ -3,14 +3,26 @@ import { Link } from '@/i18n/navigation'
 
 interface HeroBannerProps {
   variant?: string
+  eyebrow?: string | null
   headline?: string | null
   subtext?: string | null
   ctaText?: string | null
   ctaLink?: string | null
   bannerUrl?: string | null
+  secondaryCta?: { label: string; href: string } | null
 }
 
-export default function HeroBanner({ variant = 'default', headline, subtext, ctaText, ctaLink, bannerUrl }: HeroBannerProps) {
+// Splits "Displays that *go still* when you look away." into plain-text runs
+// and an accent-colored <em> for the *starred* phrase, so store owners can
+// mark up hero copy without needing HTML.
+function renderHeadline(title: string) {
+  const parts = title.split(/\*(.+?)\*/g)
+  return parts.map((part, i) =>
+    i % 2 === 1 ? <em key={i} className="theme-hero-em">{part}</em> : <span key={i}>{part}</span>
+  )
+}
+
+export default function HeroBanner({ variant = 'default', eyebrow, headline, subtext, ctaText, ctaLink, bannerUrl, secondaryCta }: HeroBannerProps) {
   const t = useTranslations('hero')
   const title = headline || t('headline')
   const sub = subtext || t('subtext')
@@ -66,6 +78,9 @@ export default function HeroBanner({ variant = 'default', headline, subtext, cta
                 ? 'max-w-lg'
                 : 'max-w-2xl'
         }`}>
+          {eyebrow && !isBanner && (
+            <span className="theme-hero-eyebrow block">{eyebrow}</span>
+          )}
           <h1 className={`theme-hero-title font-bold leading-tight mb-6 text-hero-text ${
             isCentered
               ? 'text-5xl md:text-7xl'
@@ -75,7 +90,7 @@ export default function HeroBanner({ variant = 'default', headline, subtext, cta
                   ? 'text-3xl md:text-4xl'
                   : 'text-4xl md:text-6xl'
           }`}>
-            {title}
+            {renderHeadline(title)}
           </h1>
           {!isBanner && (
             <p className={`theme-hero-subtitle text-hero-sub ${
@@ -84,14 +99,24 @@ export default function HeroBanner({ variant = 'default', headline, subtext, cta
               {sub}
             </p>
           )}
-          <Link
-            href={href}
-            className={`theme-hero-cta inline-block bg-white text-gray-900 font-semibold rounded-btn hover:bg-gray-100 transition-colors ${
-              isBanner ? 'px-6 py-2.5 text-sm' : 'px-8 py-4 text-lg'
-            }`}
-          >
-            {cta}
-          </Link>
+          <div className="theme-hero-cta-row flex items-center gap-3.5 flex-wrap">
+            <Link
+              href={href}
+              className={`theme-hero-cta inline-block bg-white text-gray-900 font-semibold rounded-btn hover:bg-gray-100 transition-colors ${
+                isBanner ? 'px-6 py-2.5 text-sm' : 'px-8 py-4 text-lg'
+              }`}
+            >
+              {cta}
+            </Link>
+            {secondaryCta && !isBanner && (
+              <Link
+                href={secondaryCta.href}
+                className="theme-hero-cta-secondary inline-block font-semibold transition-colors px-8 py-4 text-lg"
+              >
+                {secondaryCta.label}
+              </Link>
+            )}
+          </div>
         </div>
       </div>
 
@@ -108,8 +133,8 @@ export default function HeroBanner({ variant = 'default', headline, subtext, cta
               <span className="theme-device-month">{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
               <span className="theme-device-date">{new Date().getDate()}</span>
               <span className="theme-device-caption">
-                <span>{new Date().toLocaleDateString(undefined, { weekday: 'long' })}</span>
-                <span>Refreshes daily</span>
+                <span>62% battery</span>
+                <span>Refreshed 06:00</span>
               </span>
             </div>
           </div>

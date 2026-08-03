@@ -64,11 +64,14 @@ export async function generateMetadata({
   }
 }
 
-function FeaturedProducts({ products, variant = 'grid-4', heading, cardVariant = 'default' }: { products: any[]; variant?: string; heading: string; cardVariant?: string }) {
+function FeaturedProducts({ products, variant = 'grid-4', eyebrow, heading, cardVariant = 'default' }: { products: any[]; variant?: string; eyebrow?: string; heading: string; cardVariant?: string }) {
   if (products.length === 0) {
     return (
       <section data-theme-section="home-featured" className="theme-home-featured max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <h2 className="text-2xl font-bold mb-8">{heading}</h2>
+        <div className="theme-featured-head flex justify-between items-baseline mb-8">
+          {eyebrow && <span className="theme-eyebrow">{eyebrow}</span>}
+          <h2 className="theme-featured-heading text-2xl font-bold">{heading}</h2>
+        </div>
         <div className="text-center py-20 text-gray-500">
           <p className="text-lg">Products coming soon!</p>
         </div>
@@ -89,7 +92,10 @@ function FeaturedProducts({ products, variant = 'grid-4', heading, cardVariant =
 
   return (
     <section data-theme-section="home-featured" data-variant={variant} className={`theme-home-featured ${containerClass} mx-auto px-4 sm:px-6 lg:px-8 py-16`}>
-      <h2 className="text-2xl font-bold mb-8">{heading}</h2>
+      <div className="theme-featured-head flex justify-between items-baseline mb-8">
+        {eyebrow && <span className="theme-eyebrow">{eyebrow}</span>}
+        <h2 className="theme-featured-heading text-2xl font-bold">{heading}</h2>
+      </div>
       <div data-theme-section="product-grid" data-variant={variant} className={`theme-product-grid ${gridClass}`}>
         {products.map((p: any, i: number) => (
           <div
@@ -140,11 +146,13 @@ export default async function HomePage({
               <HeroBanner
                 key={key}
                 variant={section.variant}
+                eyebrow={section.eyebrow}
                 headline={store?.heroHeadline}
                 subtext={store?.heroSubtext}
                 ctaText={store?.heroCtaText}
                 ctaLink={store?.heroCtaLink}
                 bannerUrl={store?.heroBannerUrl}
+                secondaryCta={section.cta}
               />
             )
           case 'featured-products':
@@ -153,6 +161,7 @@ export default async function HomePage({
                 key={key}
                 products={featuredProducts}
                 variant={section.variant}
+                eyebrow={section.eyebrow}
                 heading={section.heading ?? t('featured')}
                 cardVariant={sections.productCard}
               />
@@ -160,7 +169,7 @@ export default async function HomePage({
           case 'newsletter':
             return <NewsletterSection key={key} variant={section.variant} />
           case 'brand-statement':
-            return <BrandStatement key={key} />
+            return <BrandStatement key={key} eyebrow={section.eyebrow} />
           case 'categories':
             return <CategoriesSection key={key} categories={categories} variant={section.variant} heading={section.heading} />
           case 'testimonials':

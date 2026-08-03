@@ -25,6 +25,7 @@ const homeSectionSchema = z.object({
     'countdown', 'faq', 'video', 'blog-posts', 'icon-row',
   ]),
   variant: z.string().max(30).optional(),
+  eyebrow: z.string().max(100).optional(),
   heading: z.string().max(200).optional(),
   text: z.string().max(1000).optional(),
   cta: z.object({ label: z.string().max(50), href: z.string().max(200) }).optional(),
@@ -56,6 +57,8 @@ const sectionsSchema = z.object({
   announcementBar: z.object({
     messages: z.array(z.string().max(200)).max(5),
     speed: z.number().optional(),
+    variant: z.enum(['marquee', 'utility']).optional(),
+    showClock: z.boolean().optional(),
   }).optional(),
 }).optional()
 

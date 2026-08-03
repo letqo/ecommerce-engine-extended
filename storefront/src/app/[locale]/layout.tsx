@@ -11,6 +11,7 @@ import Footer from '@/components/Footer'
 import { getStoreInfo, STORE_URL } from '@/lib/seo'
 import CookieConsent from '@/components/CookieConsent'
 import { CurrencyProvider } from '@/lib/currency'
+import UtilityClock from '@/components/UtilityClock'
 
 const OG_LOCALE: Record<string, string> = {
   en: 'en_US', fr: 'fr_FR', de: 'de_DE', it: 'it_IT', es: 'es_ES',
@@ -80,27 +81,45 @@ export default async function LocaleLayout({
       >
         <NextIntlClientProvider messages={messages}>
           <CurrencyProvider currency={currency}>
-            {store?.announcementActive && store.announcementText ? (
-              <div data-theme-section="announcement-bar" className="theme-announcement-bar bg-primary text-primary-text text-xs text-center py-1.5 overflow-hidden">
-                <div className="animate-marquee whitespace-nowrap">
-                  {[0, 1].map((i) =>
-                    store.announcementLink ? (
-                      <Link key={i} href={store.announcementLink} className="mx-8 hover:underline">{store.announcementText}</Link>
+            {(() => {
+              const storeMessage = store?.announcementActive && store.announcementText ? store.announcementText : null
+              const messages = storeMessage ? [storeMessage] : sections.announcementBar?.messages ?? []
+              if (messages.length === 0) return null
+              const isUtility = sections.announcementBar?.variant === 'utility'
+
+              if (isUtility) {
+                return (
+                  <div data-theme-section="announcement-bar" data-variant="utility" className="theme-announcement-bar bg-primary text-primary-text text-xs py-1.5">
+                    <div className="theme-utility-bar-row max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+                      {storeMessage && store?.announcementLink ? (
+                        <Link href={store.announcementLink} className="hover:underline">{storeMessage}</Link>
+                      ) : (
+                        <span>{messages[0]}</span>
+                      )}
+                      {sections.announcementBar?.showClock && <UtilityClock />}
+                    </div>
+                  </div>
+                )
+              }
+
+              return (
+                <div data-theme-section="announcement-bar" className="theme-announcement-bar bg-primary text-primary-text text-xs text-center py-1.5 overflow-hidden">
+                  <div className="animate-marquee whitespace-nowrap">
+                    {storeMessage ? (
+                      [0, 1].map((i) =>
+                        store?.announcementLink ? (
+                          <Link key={i} href={store.announcementLink} className="mx-8 hover:underline">{storeMessage}</Link>
+                        ) : (
+                          <span key={i} className="mx-8">{storeMessage}</span>
+                        )
+                      )
                     ) : (
-                      <span key={i} className="mx-8">{store.announcementText}</span>
-                    )
-                  )}
+                      messages.map((msg, i) => <span key={i} className="mx-8">{msg}</span>)
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : sections.announcementBar && (
-              <div data-theme-section="announcement-bar" className="theme-announcement-bar bg-primary text-primary-text text-xs text-center py-1.5 overflow-hidden">
-                <div className="animate-marquee whitespace-nowrap">
-                  {sections.announcementBar.messages.map((msg, i) => (
-                    <span key={i} className="mx-8">{msg}</span>
-                  ))}
-                </div>
-              </div>
-            )}
+              )
+            })()}
             <Header variant={sections.header.variant} navItems={sections.header.navItems} storeName={storeName} logoUrl={store?.logoUrl} />
             <main className="flex-1">{children}</main>
             <Footer variant={sections.footer.variant} hideNewsletter={sections.home.some((s) => s.type === 'newsletter')} storeName={storeName} />

@@ -24,17 +24,18 @@ export default function Footer({ variant = 'default', hideNewsletter = false, st
   if (variant === 'minimal') {
     return (
       <footer data-theme-section="footer" data-variant="minimal" className="theme-footer bg-footer-bg text-footer-text mt-auto">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10 flex flex-wrap items-center justify-between gap-4">
           <div className="theme-slot theme-slot-footer-before" aria-hidden="true" />
+          <span className="theme-footer-wordmark font-semibold">{storeName}</span>
           <div className="theme-footer-links flex flex-wrap justify-center gap-6 text-sm">
             <Link href="/products" className="hover:text-white transition-colors">{t('allProducts')}</Link>
             <Link href="/account/login" className="hover:text-white transition-colors">{t('myAccount')}</Link>
             <Link href="/privacy-policy" className="opacity-50 hover:opacity-100 hover:text-white transition-colors">{t('privacy')}</Link>
             <Link href="/terms-of-service" className="opacity-50 hover:opacity-100 hover:text-white transition-colors">{t('terms')}</Link>
           </div>
-          <div className="theme-footer-copyright text-sm text-center mt-6 opacity-60">
+          <span className="theme-footer-copyright text-sm opacity-60">
             © {new Date().getFullYear()} {storeName}. {t('rights')}
-          </div>
+          </span>
         </div>
       </footer>
     )

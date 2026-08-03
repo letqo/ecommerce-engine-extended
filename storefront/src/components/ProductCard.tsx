@@ -126,13 +126,15 @@ export default function ProductCard({ product, href, variant = 'default' }: { pr
     return (
       <Link href={href ?? `/products/${product.slug}`} data-theme-section="product-card" data-variant="plate" className="theme-product-card group block">
         <div className="theme-card-image relative">
-          <div className="theme-plate-screen flex items-center justify-center overflow-hidden">
+          <div className="theme-plate-screen overflow-hidden">
             {hasImage ? (
               <Image src={image} alt={product.title} width={480} height={300} className="w-full h-full object-cover" />
             ) : (
-              <svg className="theme-plate-mountains" viewBox="0 0 100 40" preserveAspectRatio="xMidYMax meet">
-                <path d="M0 40 L18 14 L30 26 L46 6 L64 30 L78 18 L100 40 Z" />
-              </svg>
+              <div className="theme-plate-inner-screen flex items-center justify-center">
+                <svg className="theme-plate-mountains" viewBox="0 0 100 40" preserveAspectRatio="xMidYMax meet">
+                  <path d="M0 40 L18 14 L30 26 L46 6 L64 30 L78 18 L100 40 Z" />
+                </svg>
+              </div>
             )}
           </div>
           <button
