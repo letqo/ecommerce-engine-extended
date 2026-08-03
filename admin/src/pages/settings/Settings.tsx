@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Loader2, Check, Globe, Sparkles, Upload, Wand2 } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import LocalePills, { LOCALES as LOCALE_CODES, LOCALE_LABELS, LocaleCode } from '@/components/LocalePills'
+import { useStoreContext } from '@/stores/storeContext'
 
 const SOURCING_COUNTRIES = [
   { code: 'US', label: 'United States' },
@@ -160,6 +161,7 @@ export default function Settings() {
   const [translateError, setTranslateError] = useState<string | null>(null)
 
   const { register, reset, handleSubmit, setValue, watch } = useForm()
+  const { refreshStores } = useStoreContext()
   const logoUrl = watch('logoUrl')
   const faviconUrl = watch('faviconUrl')
   const targetMarkets: string[] = watch('targetMarkets') ?? []
@@ -227,6 +229,9 @@ export default function Settings() {
       TRANSLATABLE_FIELDS.some((f) => t[f]?.trim())
     )
     await api.put('/api/admin/store', { ...data, translations })
+    // Sidebar's store switcher caches name/currency/shipToCountry from login — refresh it
+    // so a settings change (e.g. currency, ship-to country) shows up without a full reload.
+    await refreshStores()
     setSaving(false)
     setSaved(true)
     setTimeout(() => setSaved(false), 2000)
