@@ -18,6 +18,8 @@ export interface StoreInfo {
   heroCtaText?: string | null
   heroCtaLink?: string | null
   heroBannerUrl?: string | null
+  targetMarkets?: string[]
+  shipToCountry?: string
 }
 
 export async function getStoreInfo(): Promise<StoreInfo | null> {
