@@ -1,15 +1,13 @@
 import { useTranslations } from 'next-intl'
 
 export default function BrandStatement({ eyebrow }: { eyebrow?: string }) {
-  let statement = ''
-  try {
-    const t = useTranslations('brand')
-    statement = t('statement')
-  } catch {
-    return null
-  }
+  // Note: useTranslations() suspends internally on first render (via React's `use()`);
+  // wrapping it in try/catch swallows that Suspense signal and silently breaks the
+  // section, so this must be called unguarded.
+  const t = useTranslations('brand')
+  const statement = t('statement')
 
-  if (!statement) return null
+  if (!statement || statement === 'brand.statement') return null
 
   return (
     <section id="the-idea" data-theme-section="home-brand" className="theme-home-brand">
