@@ -90,6 +90,7 @@ export default function CheckoutPage() {
   const [deliveryEstimate, setDeliveryEstimate] = useState<{ min: number; max: number } | null>(null)
   const [deliveryLoading, setDeliveryLoading] = useState(false)
   const [parcelCount, setParcelCount] = useState(1)
+  const [shipCountries, setShipCountries] = useState<{ code: string; label: string }[]>([])
 
   const [couponCode, setCouponCode] = useState('')
   const [couponApplying, setCouponApplying] = useState(false)
@@ -104,12 +105,33 @@ export default function CheckoutPage() {
     if (layout === 'single-column') setCheckoutLayout('single-column')
   }, [])
 
-  const { register, handleSubmit, watch, formState: { errors } } = useForm<FormData>({
+  const { register, handleSubmit, watch, setValue, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { country: 'US' },
+    defaultValues: { country: '' },
   })
 
   const watchedCountry = watch('country')
+
+  // Country list is driven entirely by the store's configured target markets
+  // (Settings → Target markets) — nothing hardcoded, so it stays correct as
+  // markets are added/removed there. Falls back to shipToCountry if a store
+  // has no target markets configured yet, so the field is never empty.
+  useEffect(() => {
+    api.get<{ success: boolean; data: { targetMarkets?: string[]; shipToCountry?: string } }>('/store/store/info')
+      .then((res) => {
+        const shipToCountry = res.data.shipToCountry
+        const codes = res.data.targetMarkets?.length ? res.data.targetMarkets : [shipToCountry ?? 'US']
+        let regionNames: Intl.DisplayNames | null = null
+        try { regionNames = new Intl.DisplayNames([locale], { type: 'region' }) } catch {}
+        const list = codes
+          .map((code) => ({ code, label: regionNames?.of(code) ?? code }))
+          .sort((a, b) => a.label.localeCompare(b.label))
+        setShipCountries(list)
+        setValue('country', shipToCountry && codes.includes(shipToCountry) ? shipToCountry : codes[0])
+      })
+      .catch(() => setShipCountries([{ code: 'US', label: 'United States' }]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   useEffect(() => {
     const country = watchedCountry?.trim()
@@ -307,7 +329,18 @@ export default function CheckoutPage() {
           </div>
           <div className="grid grid-cols-2 gap-4">
             {field(t('zip'), 'zip')}
-            {field(t('country'), 'country')}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('country')}</label>
+              <select
+                {...register('country')}
+                className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary bg-white"
+              >
+                {shipCountries.map((c) => (
+                  <option key={c.code} value={c.code}>{c.label}</option>
+                ))}
+              </select>
+              {errors.country && <p className="text-xs text-red-500 mt-1">{errors.country.message as string}</p>}
+            </div>
           </div>
           {error && <p className="text-sm text-red-600">{error}</p>}
           <button type="submit" disabled={loading} className="w-full bg-primary text-primary-text py-4 rounded-btn font-semibold hover:bg-primary-hover transition-colors disabled:opacity-50 mt-4">
