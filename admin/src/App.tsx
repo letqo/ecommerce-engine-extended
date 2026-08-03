@@ -28,6 +28,7 @@ import StoreHealth from '@/pages/store-health/StoreHealth'
 import ClaimsList from '@/pages/claims/ClaimsList'
 import ClaimDetail from '@/pages/claims/ClaimDetail'
 import FulfillmentQueue from '@/pages/fulfillment/FulfillmentQueue'
+import Integrations from '@/pages/integrations/Integrations'
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { token, admin, fetchMe } = useAuthStore()
@@ -71,6 +72,7 @@ export default function App() {
           <Route path="themes" element={<Themes />} />
           <Route path="themes/:slug/translations" element={<ThemeTranslations />} />
           <Route path="supplier/import" element={<ImportProducts />} />
+          <Route path="integrations" element={<Integrations />} />
           <Route path="settings" element={<Settings />} />
           <Route path="stores" element={<Stores />} />
           <Route path="blog" element={<BlogList />} />

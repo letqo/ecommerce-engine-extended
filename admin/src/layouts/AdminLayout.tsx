@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import {
   LayoutDashboard, Package, ShoppingCart, Users, Tag,
-  Settings, LogOut, Store, ChevronRight, Palette, PackagePlus, PenLine, MessageSquare, FolderTree, Mail, RefreshCw, Sparkles, Gauge, AlertTriangle, Truck,
+  Settings, LogOut, Store, ChevronRight, Palette, PackagePlus, PenLine, MessageSquare, FolderTree, Mail, RefreshCw, Sparkles, Gauge, AlertTriangle, Truck, Plug,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,7 @@ const nav: { to: string; icon: any; label: string; end?: boolean; badge?: boolea
   { to: '/products', icon: Package, label: 'Products' },
   { to: '/categories', icon: FolderTree, label: 'Categories' },
   { to: '/supplier/import', icon: PackagePlus, label: 'Import' },
+  { to: '/integrations', icon: Plug, label: 'Integrations' },
   { to: '/sync', icon: RefreshCw, label: 'Sync', badge: true },
   { to: '/orders', icon: ShoppingCart, label: 'Orders' },
   { to: '/fulfillment-queue', icon: Truck, label: 'Fulfillment Queue', badge: true },
