@@ -41,7 +41,7 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
       data-theme-section="hero"
       data-variant={variant}
       className={`theme-hero relative ${
-        isSplit || isShowcase
+        isSplit
           ? 'grid grid-cols-1 md:grid-cols-2'
           : ''
       } ${
@@ -49,24 +49,31 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
       } ${
         isSplit ? 'min-h-[80vh]' : ''
       } ${
-        isShowcase ? 'min-h-[75vh] md:min-h-[90vh]' : ''
+        isShowcase ? 'min-h-[70vh] md:min-h-[85vh] flex items-center overflow-hidden' : ''
       }`}
       style={
-        bannerUrl && !isShowcase
-          ? { backgroundImage: `url(${bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-          : { background: 'var(--hero-bg)' }
+        bannerUrls && bannerUrls.length > 1
+          ? undefined
+          : (bannerUrl ?? bannerUrls?.[0])
+            ? { backgroundImage: `url(${bannerUrl ?? bannerUrls?.[0]})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+            : { background: 'var(--hero-bg)' }
       }
     >
+      {isShowcase && bannerUrls && bannerUrls.length > 1 && <HeroCarousel images={bannerUrls} />}
+      {isShowcase && !(bannerUrls && bannerUrls.length > 1) && (bannerUrl ?? bannerUrls?.[0]) && (
+        <div className="theme-hero-bg-scrim absolute inset-0" aria-hidden="true" />
+      )}
+
       <div className="theme-slot theme-slot-hero-before" aria-hidden="true" />
 
       {/* Text content */}
-      <div className={`${
+      <div className={`relative z-10 ${
         isBanner
           ? 'flex flex-col md:flex-row items-center justify-between gap-4 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12'
           : isSplit
             ? 'flex items-center px-6 sm:px-12 lg:px-20 py-20 md:py-0'
             : isShowcase
-              ? 'flex items-center px-6 sm:px-12 lg:px-20 py-20 md:py-0'
+              ? 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20'
               : isCentered
                 ? 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'
                 : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32'
@@ -127,34 +134,20 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
         <div className="theme-hero-visual hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5" />
       )}
 
-      {/* Showcase column — an auto-advancing carousel when multiple images are set (bannerUrls),
-          a single real product photo when just one is (bannerUrl, kept for back-compat), or the
-          device-screen illustration as a placeholder when neither is. */}
-      {isShowcase && (
-        <div className="theme-hero-showcase hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5">
-          {bannerUrls && bannerUrls.length > 0 ? (
-            <HeroCarousel images={bannerUrls} />
-          ) : bannerUrl ? (
-            <div className="theme-hero-bezel-wrap w-full">
-              <div className="theme-hero-bezel">
-                <div className="theme-hero-screen relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img src={bannerUrl} alt="" className="theme-hero-showcase-image absolute inset-0 w-full h-full object-contain" />
-                </div>
-              </div>
+      {/* Showcase with no image at all still gets the placeholder illustration, centered as
+          its own layer rather than a side column, now that the variant is full-bleed background. */}
+      {isShowcase && !bannerUrl && !(bannerUrls && bannerUrls.length > 0) && (
+        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5">
+          <div className="theme-device">
+            <div className="theme-device-screen theme-device-refresh">
+              <span className="theme-device-month">{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
+              <span className="theme-device-date">{new Date().getDate()}</span>
+              <span className="theme-device-caption">
+                <span>62% battery</span>
+                <span>Refreshed 06:00</span>
+              </span>
             </div>
-          ) : (
-            <div className="theme-device">
-              <div className="theme-device-screen theme-device-refresh">
-                <span className="theme-device-month">{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
-                <span className="theme-device-date">{new Date().getDate()}</span>
-                <span className="theme-device-caption">
-                  <span>62% battery</span>
-                  <span>Refreshed 06:00</span>
-                </span>
-              </div>
-            </div>
-          )}
+          </div>
         </div>
       )}
 
