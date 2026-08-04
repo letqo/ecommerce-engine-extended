@@ -50,7 +50,7 @@ const sectionsSchema = z.object({
   footer: z.object({ variant: z.enum(['default', 'minimal', 'newsletter', 'mega']) }).optional(),
   home: z.array(homeSectionSchema).max(10).optional(),
   productsGrid: z.enum(['grid-4', 'grid-3', 'grid-2']).optional(),
-  productDetail: z.enum(['side-by-side', 'stacked', 'gallery-sticky']).optional(),
+  productDetail: z.enum(['side-by-side', 'stacked', 'gallery-sticky', 'spec-sheet']).optional(),
   productCard: z.enum(['default', 'overlay', 'detailed', 'plate']).optional(),
   cartLayout: z.enum(['sidebar', 'bottom-bar']).optional(),
   checkoutLayout: z.enum(['two-column', 'single-column']).optional(),
