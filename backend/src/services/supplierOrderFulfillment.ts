@@ -3,6 +3,7 @@ import { prisma } from '../config/database'
 import { CJAdapter } from '../suppliers/CJAdapter'
 import { AliExpressAdapter } from '../suppliers/AliExpressAdapter'
 import { getConfigurableAdapter } from '../suppliers/registry'
+import { SupplierPrintFile } from '../suppliers/types'
 import { CONFIGURABLE_SUPPLIERS } from '../suppliers/configurableRegistry'
 import { ConfigurableSupplierKey, SupplierSettings, isConfigurableSupplierKey } from '../suppliers/configurableTypes'
 import { checkBeforeFulfillment } from './supplierSync'
@@ -205,11 +206,25 @@ export async function submitSupplierOrder(supplierOrderId: string, opts: { force
       const items = so.items.filter((item) => item.variant?.supplierVariantRef)
       if (items.length === 0) throw new Error(`No ${CONFIGURABLE_SUPPLIERS[key].displayName} variants on this parcel`)
 
+      // Gelato rejects any printable item with no artwork attached — catch that here with an
+      // actionable message rather than let the submission fail supplier-side and burn a retry.
+      if (key === 'GELATO') {
+        const missingArt = items.filter((item) => !((item.variant?.product?.printFiles as SupplierPrintFile[] | null)?.length))
+        if (missingArt.length > 0) {
+          const titles = [...new Set(missingArt.map((item) => item.variant?.product?.title ?? 'a product'))].join(', ')
+          throw new Error(`Missing print artwork for: ${titles} — add print files in Admin → Products before this order can be submitted to Gelato.`)
+        }
+      }
+
       const adapter = getConfigurableAdapter(key, (storeSupplier.settings ?? {}) as SupplierSettings)
       result = await adapter.placeOrder({
         ourOrderId: String(so.order.orderNumber),
         shippingAddress,
-        items: items.map((item) => ({ variantSupplierId: item.variant!.supplierVariantRef!, quantity: item.quantity })),
+        items: items.map((item) => ({
+          variantSupplierId: item.variant!.supplierVariantRef!,
+          quantity: item.quantity,
+          files: (item.variant?.product?.printFiles as SupplierPrintFile[] | null) ?? undefined,
+        })),
       })
     } else {
       throw new Error(`No ordering API for supplier ${so.supplierKey} — fulfil this parcel manually.`)

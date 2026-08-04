@@ -28,9 +28,14 @@ export interface SupplierVariant {
   skuAttr?: string
 }
 
+export interface SupplierPrintFile {
+  type: string
+  url: string
+}
+
 export interface SupplierOrderRequest {
   ourOrderId: string
-  items: { variantSupplierId: string; quantity: number }[]
+  items: { variantSupplierId: string; quantity: number; files?: SupplierPrintFile[] }[]
   shippingAddress: {
     firstName: string
     lastName: string

@@ -232,6 +232,10 @@ model Product {
   // CJ and AliExpress keep using their own dedicated columns above — this field is only for
   // suppliers added after them, and is what classifySupplier() reads to route a parcel.
   supplierKey              SupplierKey?
+  // Print-ready artwork for print-on-demand suppliers, e.g. [{ "type": "default", "url": "..." }]
+  // (Gelato's own file shape — see GelatoAdapter.placeOrder). Applied to every order item for
+  // this product regardless of variant; not used by suppliers that don't need artwork.
+  printFiles               Json?
   // Null = inherit the category's profile. Set to override it (including to NONE).
   complianceProfile        ComplianceProfile?
   // Free-form key/value bag holding whatever fields the resolved profile requires — see

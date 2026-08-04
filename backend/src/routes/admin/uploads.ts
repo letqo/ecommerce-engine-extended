@@ -62,6 +62,36 @@ router.post('/images', upload.array('files', 10), async (req: AdminRequest, res:
   } catch (err) { next(err) }
 })
 
+const printFileUpload = multer({
+  storage: multer.memoryStorage(),
+  // Print artwork needs to stay full quality/resolution — much larger than a webp thumbnail.
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowed = ['image/png', 'image/jpeg', 'application/pdf', 'image/svg+xml']
+    if (allowed.includes(file.mimetype)) cb(null, true)
+    else cb(createError('Print files must be PNG, JPEG, PDF, or SVG', 400, 'INVALID_FILE') as any)
+  },
+})
+
+// POST /api/admin/uploads/print-file
+// Deliberately skips the sharp resize/webp re-encode the image endpoints above do — print
+// suppliers (Gelato) need the artwork at its original resolution and format, not a display
+// thumbnail. See Product.printFiles / GelatoAdapter.placeOrder.
+router.post('/print-file', printFileUpload.single('file'), async (req: AdminRequest, res: Response, next: NextFunction) => {
+  try {
+    if (!req.file) throw createError('No file provided', 400, 'NO_FILE')
+    const folder = (req.query.folder as string) || 'print-files'
+
+    const url = await uploadFile(req.file.buffer, `${Date.now()}-${req.file.originalname}`, req.file.mimetype, folder)
+
+    await prisma.asset.create({
+      data: { filename: req.file.originalname, url, mimeType: req.file.mimetype, size: req.file.size, folder },
+    })
+
+    res.json({ success: true, data: { url } })
+  } catch (err) { next(err) }
+})
+
 // DELETE /api/admin/uploads
 router.delete('/', async (req: AdminRequest, res: Response, next: NextFunction) => {
   try {

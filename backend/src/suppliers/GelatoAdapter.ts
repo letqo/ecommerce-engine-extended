@@ -114,11 +114,10 @@ export class GelatoAdapter implements SupplierAdapter {
         itemReferenceId: `${order.ourOrderId}-${idx + 1}`,
         productUid: i.variantSupplierId,
         quantity: i.quantity,
-        // TODO(real-docs-needed): print files. Gelato needs a `files: [{ type, url }]` array
-        // pointing at the artwork for anything printable. This platform has no artwork model
-        // yet (products carry photos, not print-ready assets), so orders submitted today will
-        // be rejected for products that require a file. Wire this once a print-asset field
-        // exists on ProductVariant.
+        // Print-ready artwork — Product.printFiles, resolved by the caller (see
+        // supplierOrderFulfillment.ts, which also refuses to submit a Gelato order missing this
+        // rather than let Gelato reject it with a less actionable error).
+        ...(i.files && i.files.length > 0 ? { files: i.files } : {}),
       })),
       shippingAddress: {
         firstName: a.firstName,

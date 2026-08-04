@@ -97,6 +97,9 @@ export const productSchema = z.object({
   cjProductUrl: z.string().optional().nullable(),
   // Which configurable supplier sources this product, if any.
   supplierKey: z.enum(['PRINTFUL', 'GELATO', 'BIGBUY', 'WOO_BRIDGE']).optional().nullable(),
+  // Print-ready artwork for print-on-demand suppliers (currently: Gelato). See
+  // GelatoAdapter.placeOrder and supplierOrderFulfillment.ts.
+  printFiles: z.array(z.object({ type: z.string(), url: z.string() })).optional().nullable(),
   // Null means "inherit the category's profile"; an explicit NONE opts this product out of it.
   complianceProfile: z.enum(COMPLIANCE_PROFILE_VALUES).optional().nullable(),
   // Free-form key/value bag validated against the resolved profile's required fields, not
@@ -171,7 +174,7 @@ export async function updateProduct(storeId: string | undefined, productId: stri
 
     return tx.product.update({
       where: { id: productId },
-      data: { ...rest, complianceData: jsonColumnInput(rest.complianceData) },
+      data: { ...rest, complianceData: jsonColumnInput(rest.complianceData), printFiles: jsonColumnInput(rest.printFiles) },
       include: { images: { orderBy: { sortOrder: 'asc' } }, variants: true, translations: true },
     })
   }, { timeout: 20000, maxWait: 10000 })
@@ -265,6 +268,7 @@ router.post('/', async (req: AdminRequest, res: Response, next: NextFunction) =>
       data: {
         ...rest,
         complianceData: jsonColumnInput(rest.complianceData),
+        printFiles: jsonColumnInput(rest.printFiles),
         slug,
         storeId,
         images: { create: images.map((img, i) => ({ ...img, sortOrder: img.sortOrder ?? i })) },

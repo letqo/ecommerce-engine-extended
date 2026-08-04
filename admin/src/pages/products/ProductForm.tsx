@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ArrowLeft, Plus, Trash2, Loader2, Wand2, Ban, Clock } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Loader2, Wand2, Ban, Clock, Upload, FileImage } from 'lucide-react'
 import { formatDate } from '@/lib/utils'
 import AIEnhancePanel, { AIEnhanceResult } from '@/components/AIEnhancePanel'
 import ImageStudio from '@/components/ImageStudio'
@@ -48,6 +48,8 @@ const schema = z.object({
   complianceData: z.record(z.string()).default({}),
   images: z.array(z.object({ url: z.string().url('Invalid URL'), altText: z.string().optional().nullable(), sortOrder: z.number().default(0) })).default([]),
   variants: z.array(variantSchema).min(1, 'At least one variant required'),
+  // Print-ready artwork for Gelato-sourced products. See Product.printFiles.
+  printFiles: z.array(z.object({ type: z.string().min(1, 'Required'), url: z.string().url('Invalid URL') })).default([]),
   translations: z.array(z.object({
     locale: z.string(),
     title: z.string().optional().nullable(),
@@ -82,9 +84,15 @@ export default function ProductForm() {
   const [translateLoading, setTranslateLoading] = useState(false)
   const [translateError, setTranslateError] = useState('')
   const [isSupplierLinked, setIsSupplierLinked] = useState(false)
+  // Which configurable supplier (if any) sources this product — set at import time, not
+  // editable here (same as cjProductId/aliexpressProductId above). Only used to decide whether
+  // to show the Print Files section, which only Gelato needs.
+  const [productSupplierKey, setProductSupplierKey] = useState<string | null>(null)
   const [unavailableMarkets, setUnavailableMarkets] = useState<string[]>([])
   const [deliveryNote, setDeliveryNote] = useState<string | null>(null)
   const [importedAt, setImportedAt] = useState<string | null>(null)
+  const [printFileUploading, setPrintFileUploading] = useState(false)
+  const [printFileError, setPrintFileError] = useState('')
   // Compliance profile registry, fetched from the backend so the field list lives in exactly
   // one place (backend/src/lib/complianceProfiles.ts) rather than being mirrored here.
   const [complianceProfiles, setComplianceProfiles] = useState<ComplianceProfileDef[]>([])
@@ -93,11 +101,12 @@ export default function ProductForm() {
 
   const { register, handleSubmit, control, reset, setValue, getValues, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { status: 'DRAFT', isFeatured: false, listVariantsIndividually: false, variants: [{ title: 'Default', price: 0, inventoryQty: 0, isDefault: true, options: {} }], images: [], translations: emptyTranslations() },
+    defaultValues: { status: 'DRAFT', isFeatured: false, listVariantsIndividually: false, variants: [{ title: 'Default', price: 0, inventoryQty: 0, isDefault: true, options: {} }], images: [], printFiles: [], translations: emptyTranslations() },
   })
 
   const { fields: variantFields, append: addVariant, remove: removeVariant } = useFieldArray({ control, name: 'variants' })
   const { fields: imageFields, append: addImage, remove: removeImage } = useFieldArray({ control, name: 'images' })
+  const { fields: printFileFields, append: addPrintFile, remove: removePrintFile } = useFieldArray({ control, name: 'printFiles' })
   const { fields: translationFields } = useFieldArray({ control, name: 'translations' })
 
   // Same resolution rule the backend uses: the product's own profile wins, otherwise it
@@ -116,6 +125,7 @@ export default function ProductForm() {
       api.get(`/api/admin/products/${id}`).then((r) => {
         const p = r.data.data
         setIsSupplierLinked(!!(p.cjProductId || p.aliexpressProductId))
+        setProductSupplierKey(p.supplierKey ?? null)
         setUnavailableMarkets(p.unavailableMarkets ?? [])
         setDeliveryNote(p.deliveryNote ?? null)
         setImportedAt(p.createdAt ?? null)
@@ -135,6 +145,7 @@ export default function ProductForm() {
             Object.entries(p.complianceData ?? {}).map(([k, v]) => [k, v == null ? '' : String(v)])
           ),
           variants: p.variants.map((v: any) => ({ ...v, compareAtPrice: v.compareAtPrice ?? '', costPerItem: v.costPerItem ?? '' })),
+          printFiles: p.printFiles ?? [],
           translations,
         })
       })
@@ -217,6 +228,26 @@ export default function ProductForm() {
     Object.entries(fields).forEach(([key, val]) => {
       setValue(key as keyof FormData, val as any, { shouldDirty: true })
     })
+  }
+
+  const handlePrintFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file) return
+    setPrintFileUploading(true)
+    setPrintFileError('')
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      const res = await api.post<{ success: boolean; data: { url: string } }>(
+        '/api/admin/uploads/print-file', formData, { headers: { 'Content-Type': 'multipart/form-data' } }
+      )
+      addPrintFile({ type: 'default', url: res.data.data.url })
+    } catch (e: any) {
+      setPrintFileError(e.response?.data?.error?.message || 'Upload failed')
+    } finally {
+      setPrintFileUploading(false)
+    }
   }
 
   const handleApplyVariant = (variantId: string, title: string, options: Record<string, string>) => {
@@ -449,6 +480,45 @@ export default function ProductForm() {
                 ))}
               </CardContent>
             </Card>
+
+            {/* Print files — only Gelato needs artwork attached to place an order. Product must
+                already be linked to Gelato via import (supplierKey isn't editable here). */}
+            {productSupplierKey === 'GELATO' && (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Print files</CardTitle>
+                    <p className="text-xs text-muted-foreground pt-1">
+                      Required by Gelato before an order for this product can be submitted — see its product page on
+                      Gelato's dashboard for which print areas it needs (e.g. "default", "front", "back").
+                    </p>
+                  </div>
+                  <label>
+                    <input type="file" accept=".png,.jpg,.jpeg,.pdf,.svg" className="hidden" onChange={handlePrintFileUpload} disabled={printFileUploading} />
+                    <span className={`inline-flex items-center gap-2 h-9 px-3 rounded-md border text-sm font-medium cursor-pointer ${printFileUploading ? 'opacity-50 pointer-events-none' : 'hover:bg-accent'}`}>
+                      {printFileUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                      {printFileUploading ? 'Uploading…' : 'Upload file'}
+                    </span>
+                  </label>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {printFileError && <p className="text-xs text-destructive">{printFileError}</p>}
+                  {printFileFields.length === 0 && (
+                    <p className="text-sm text-muted-foreground">No print files yet — Gelato will reject orders for this product until one is added.</p>
+                  )}
+                  {printFileFields.map((field, i) => (
+                    <div key={field.id} className="flex items-center gap-2 border rounded-lg p-2.5">
+                      <FileImage className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <Input placeholder="Print area (e.g. default, front, back)" {...register(`printFiles.${i}.type`)} className="text-xs h-8 w-48" />
+                      <Input placeholder="File URL" {...register(`printFiles.${i}.url`)} className="text-xs h-8 flex-1" readOnly />
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-destructive shrink-0" onClick={() => removePrintFile(i)}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Image Studio modal */}
             {studioImageIndex !== null && getValues(`images.${studioImageIndex}.url`) && (
