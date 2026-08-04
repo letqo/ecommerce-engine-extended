@@ -15,6 +15,32 @@ import { SupplierSettings, requireSetting, optionalSetting } from './configurabl
 const ORDER_BASE = 'https://order.gelatoapis.com'
 const PRODUCT_BASE = 'https://product.gelatoapis.com'
 
+// Confirmed live 2026-08-04: neither the search nor single-product endpoint returns a `title` —
+// products only carry a flat `attributes` object (key names vary a lot per catalog, e.g.
+// GarmentColor/GarmentSize for apparel, presumably PaperFormat/Orientation for posters). Without
+// this, the admin UI showed the raw productUid string as the title (e.g.
+// "apparel_product_gca_hat_gsc_beanie_gcu_baby_..."), which is exactly why search results looked
+// like meaningless noise. Blocklist is administrative/internal-sounding keys, not a per-catalog
+// allowlist, since there's no single set of "the good" attribute names across every catalog.
+const GELATO_ATTR_BLOCKLIST = /sku|status|^state$/i
+
+function readableGelatoAttributes(attributes: Record<string, unknown> | undefined): Record<string, string> {
+  if (!attributes) return {}
+  const out: Record<string, string> = {}
+  for (const [k, v] of Object.entries(attributes)) {
+    if (GELATO_ATTR_BLOCKLIST.test(k)) continue
+    if (typeof v !== 'string' || !v.trim()) continue
+    out[k] = v
+  }
+  return out
+}
+
+function humanizeGelatoTitle(attributes: Record<string, unknown> | undefined, fallback: string): string {
+  const parts = Object.values(readableGelatoAttributes(attributes))
+    .map((v) => v.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
+  return parts.length > 0 ? parts.join(' · ') : fallback
+}
+
 // Gelato identifies a sellable thing by `productUid` — a long descriptor string like
 // `apparel_product_gca_t-shirt_gsc_crewneck_gcu_unisex_...`. That is what we store in
 // ProductVariant.supplierVariantRef.
@@ -51,7 +77,9 @@ export class GelatoAdapter implements SupplierAdapter {
   // hardcoded list of catalog names that could go stale.
   async listCatalogs(): Promise<{ catalogUid: string; title: string }[]> {
     const data = await this.request<any>(this.productHttp, 'GET', '/v3/catalogs')
-    const rows: any[] = Array.isArray(data) ? data : data?.catalogs ?? []
+    // Confirmed live 2026-08-04: the real response is { data: [{ catalogUid, title, ... }] },
+    // not a bare array or { catalogs: [...] } as the published examples suggested.
+    const rows: any[] = Array.isArray(data) ? data : data?.data ?? data?.catalogs ?? []
     return rows.map((r) => ({ catalogUid: String(r.catalogUid ?? r.uid ?? r.id), title: r.title ?? r.name ?? String(r.catalogUid ?? r.uid ?? r.id) }))
   }
 
@@ -63,15 +91,22 @@ export class GelatoAdapter implements SupplierAdapter {
     })
     const rows: any[] = data?.products ?? []
     // The catalog search filters by structured product attributes, not free text, so a
-    // keyword is applied client-side over the returned page.
+    // keyword is applied client-side over the returned page — matched against both the uid
+    // (which often embeds descriptive slugs) and the readable attribute values, since neither
+    // alone reliably contains what an operator would type.
     const needle = query.trim().toLowerCase()
-    const matched = needle ? rows.filter((r) => String(r.productUid ?? '').toLowerCase().includes(needle)) : rows
+    const matched = needle
+      ? rows.filter((r) => {
+          if (String(r.productUid ?? '').toLowerCase().includes(needle)) return true
+          return Object.values(readableGelatoAttributes(r.attributes)).some((v) => v.toLowerCase().includes(needle))
+        })
+      : rows
 
     return {
       products: matched.map((r) => ({
         supplierId: String(r.productUid),
         supplierName: 'gelato',
-        title: r.productUid ?? '',
+        title: humanizeGelatoTitle(r.attributes, r.productUid ?? ''),
         description: '',
         images: [],
         variants: [],
@@ -85,14 +120,15 @@ export class GelatoAdapter implements SupplierAdapter {
   async getProduct(supplierId: string): Promise<SupplierProduct> {
     const data = await this.request<any>(this.productHttp, 'GET', `/v3/products/${encodeURIComponent(supplierId)}`)
     // A Gelato "product" IS a fully-specified variant (size/colour/paper are baked into the
-    // uid), so it maps to exactly one SupplierVariant rather than a variant list.
+    // uid), so it maps to exactly one SupplierVariant rather than a variant list. Real shape
+    // confirmed live 2026-08-04: a flat `attributes` object (no `productAttributes` array, no
+    // `title` field at all — see humanizeGelatoTitle above).
+    const title = humanizeGelatoTitle(data?.attributes, data?.productUid ?? supplierId)
     const variants: SupplierVariant[] = [
       {
         supplierId: String(data?.productUid ?? supplierId),
-        title: data?.productUid ?? supplierId,
-        options: Object.fromEntries(
-          (data?.productAttributes ?? []).map((a: any) => [a.productAttributeUid, a.productAttributeValueUid])
-        ),
+        title,
+        options: readableGelatoAttributes(data?.attributes),
         // The catalog endpoint describes the product, not its price — pricing comes from the
         // separate Prices API / order quote. Import seeds 0 and the quote fills it in.
         costPrice: 0,
@@ -102,11 +138,11 @@ export class GelatoAdapter implements SupplierAdapter {
     return {
       supplierId: String(data?.productUid ?? supplierId),
       supplierName: 'gelato',
-      title: data?.title ?? data?.productUid ?? supplierId,
-      description: data?.description ?? '',
+      title,
+      description: '',
       images: [],
       variants,
-      categoryName: data?.catalogUid ?? this.catalogUid,
+      categoryName: this.catalogUid,
     }
   }
 
