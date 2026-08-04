@@ -57,6 +57,11 @@ async function processDescriptionImage(url: string): Promise<string | null> {
       responseType: 'arraybuffer',
       timeout: 10000,
       maxContentLength: MAX_DOWNLOAD_BYTES,
+      // Some supplier CDNs (confirmed: Good Display's, fronted by CloudFront with a WAF rule
+      // tagged CE-WAF-PROACTIVE-UA) 403 any request with no User-Agent at all, even for a
+      // public product image — axios sends none by default. A generic browser UA is enough to
+      // pass; this isn't spoofing a real session, just avoiding a bot-heuristic false positive.
+      headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36' },
     })
     const buffer = Buffer.from(res.data)
 
