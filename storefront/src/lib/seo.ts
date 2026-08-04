@@ -18,6 +18,7 @@ export interface StoreInfo {
   heroCtaText?: string | null
   heroCtaLink?: string | null
   heroBannerUrl?: string | null
+  heroBannerUrls?: string[] | null
   targetMarkets?: string[]
   shipToCountry?: string
 }

@@ -1,4 +1,4 @@
-import { Shield, Truck, RefreshCw, Clock, Award, Headphones, CreditCard, Lock, type LucideIcon } from 'lucide-react'
+import { Shield, Truck, RefreshCw, Clock, Award, Headphones, CreditCard, Lock, Sun, Leaf, Battery, Eye, type LucideIcon } from 'lucide-react'
 
 const ICONS: Record<string, LucideIcon> = {
   shield: Shield,
@@ -9,15 +9,20 @@ const ICONS: Record<string, LucideIcon> = {
   headphones: Headphones,
   'credit-card': CreditCard,
   lock: Lock,
+  sun: Sun,
+  leaf: Leaf,
+  battery: Battery,
+  eye: Eye,
 }
 
 interface Badge {
   icon: string
   label: string
   description?: string
+  body?: string
 }
 
-export default function TrustBadgesSection({ items = [], variant = 'default' }: { items?: Badge[]; variant?: string }) {
+export default function TrustBadgesSection({ items = [], variant = 'default', heading }: { items?: Badge[]; variant?: string; heading?: string }) {
   if (items.length === 0) return null
 
   const isCompact = variant === 'compact'
@@ -32,6 +37,30 @@ export default function TrustBadgesSection({ items = [], variant = 'default' }: 
               <span className="theme-spec-v">{badge.label}</span>
             </div>
           ))}
+        </div>
+      </section>
+    )
+  }
+
+  if (variant === 'grid') {
+    return (
+      <section data-theme-section="home-trust" data-variant="grid" className="theme-home-trust-grid py-16">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          {heading && <h2 className="text-2xl md:text-3xl font-bold text-center mb-12">{heading}</h2>}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-8 gap-y-10">
+            {items.map((badge, i) => {
+              const Icon = ICONS[badge.icon] ?? Shield
+              return (
+                <div key={i} className="flex gap-4">
+                  <Icon size={22} className="text-primary flex-shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-sm mb-1">{badge.label}</p>
+                    {badge.body && <p className="text-sm text-gray-500 leading-relaxed">{badge.body}</p>}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
         </div>
       </section>
     )

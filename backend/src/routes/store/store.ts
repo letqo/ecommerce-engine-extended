@@ -112,7 +112,7 @@ router.get('/info', async (req: Request, res: Response, next: NextFunction) => {
     const infoSelect = {
       name: true, description: true, logoUrl: true, faviconUrl: true, currency: true, primaryColor: true,
       announcementActive: true, announcementText: true, announcementLink: true,
-      heroHeadline: true, heroSubtext: true, heroCtaText: true, heroCtaLink: true, heroBannerUrl: true,
+      heroHeadline: true, heroSubtext: true, heroCtaText: true, heroCtaLink: true, heroBannerUrl: true, heroBannerUrls: true,
       targetMarkets: true, shipToCountry: true,
     }
     const store = storeId

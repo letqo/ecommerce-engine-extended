@@ -165,6 +165,7 @@ export default function Settings() {
   const logoUrl = watch('logoUrl')
   const faviconUrl = watch('faviconUrl')
   const targetMarkets: string[] = watch('targetMarkets') ?? []
+  const heroBannerUrls: string[] = watch('heroBannerUrls') ?? []
 
   const toggleTargetMarket = (code: string) => {
     const next = targetMarkets.includes(code)
@@ -172,6 +173,11 @@ export default function Settings() {
       : [...targetMarkets, code]
     setValue('targetMarkets', next, { shouldDirty: true })
   }
+
+  const addHeroBannerUrl = () => setValue('heroBannerUrls', [...heroBannerUrls, ''], { shouldDirty: true })
+  const removeHeroBannerUrl = (i: number) => setValue('heroBannerUrls', heroBannerUrls.filter((_, idx) => idx !== i), { shouldDirty: true })
+  const updateHeroBannerUrl = (i: number, url: string) =>
+    setValue('heroBannerUrls', heroBannerUrls.map((u, idx) => (idx === i ? url : u)), { shouldDirty: true })
 
   const generateField = async (field: GeneratableField) => {
     setGenerating(field)
@@ -438,6 +444,22 @@ export default function Settings() {
             <div className="space-y-1.5">
               <Label>Banner image URL</Label>
               <Input placeholder="https://..." {...register('heroBannerUrl')} />
+              <p className="text-xs text-muted-foreground">Used for hero layouts that fill the whole banner with one image.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Carousel images (Showcase layout)</Label>
+              <p className="text-xs text-muted-foreground mb-1">For the two-column "Showcase" hero — cycles through these automatically. Leave empty to fall back to the single banner image above.</p>
+              {heroBannerUrls.map((url, i) => (
+                <div key={i} className="flex gap-2">
+                  <Input
+                    placeholder="https://..."
+                    value={url}
+                    onChange={(e) => updateHeroBannerUrl(i, e.target.value)}
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={() => removeHeroBannerUrl(i)}>Remove</Button>
+                </div>
+              ))}
+              <Button type="button" variant="outline" size="sm" onClick={addHeroBannerUrl}>Add image</Button>
             </div>
           </CardContent>
         </Card>

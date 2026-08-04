@@ -42,6 +42,9 @@ model Store {
   heroCtaText        String?
   heroCtaLink        String?
   heroBannerUrl      String?
+  // Ordered images for the showcase hero variant's auto-advancing carousel. Empty = fall
+  // back to the single heroBannerUrl (or the illustration placeholder if that's unset too).
+  heroBannerUrls     String[] @default([])
   homeSections       Json?
   footerColumns      Json?
   activeTheme             String    @default("default")

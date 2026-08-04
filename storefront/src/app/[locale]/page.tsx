@@ -152,6 +152,7 @@ export default async function HomePage({
                 ctaText={store?.heroCtaText}
                 ctaLink={store?.heroCtaLink}
                 bannerUrl={store?.heroBannerUrl}
+                bannerUrls={store?.heroBannerUrls}
                 secondaryCta={section.cta}
               />
             )
@@ -175,7 +176,7 @@ export default async function HomePage({
           case 'testimonials':
             return <TestimonialsSection key={key} items={section.items as any} heading={section.heading} variant={section.variant} />
           case 'trust-badges':
-            return <TrustBadgesSection key={key} items={section.items as any} variant={section.variant} />
+            return <TrustBadgesSection key={key} items={section.items as any} variant={section.variant} heading={section.heading} />
           case 'promo-banner':
             return <PromoBannerSection key={key} text={section.text} cta={section.cta} variant={section.variant} imageUrl={section.imageUrl} />
           case 'image-with-text':

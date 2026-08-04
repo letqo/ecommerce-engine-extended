@@ -1,5 +1,6 @@
 import { useTranslations } from 'next-intl'
 import { Link } from '@/i18n/navigation'
+import HeroCarousel from './HeroCarousel'
 
 interface HeroBannerProps {
   variant?: string
@@ -9,6 +10,7 @@ interface HeroBannerProps {
   ctaText?: string | null
   ctaLink?: string | null
   bannerUrl?: string | null
+  bannerUrls?: string[] | null
   secondaryCta?: { label: string; href: string } | null
 }
 
@@ -22,7 +24,7 @@ function renderHeadline(title: string) {
   )
 }
 
-export default function HeroBanner({ variant = 'default', eyebrow, headline, subtext, ctaText, ctaLink, bannerUrl, secondaryCta }: HeroBannerProps) {
+export default function HeroBanner({ variant = 'default', eyebrow, headline, subtext, ctaText, ctaLink, bannerUrl, bannerUrls, secondaryCta }: HeroBannerProps) {
   const t = useTranslations('hero')
   const title = headline || t('headline')
   const sub = subtext || t('subtext')
@@ -125,12 +127,14 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
         <div className="theme-hero-visual hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5" />
       )}
 
-      {/* Showcase column — a real product photo (reusing the store's banner image field, just
-          scoped to this column instead of a full-section background) when one is set, otherwise
-          the device-screen illustration as a placeholder. */}
+      {/* Showcase column — an auto-advancing carousel when multiple images are set (bannerUrls),
+          a single real product photo when just one is (bannerUrl, kept for back-compat), or the
+          device-screen illustration as a placeholder when neither is. */}
       {isShowcase && (
         <div className="theme-hero-showcase hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5">
-          {bannerUrl ? (
+          {bannerUrls && bannerUrls.length > 0 ? (
+            <HeroCarousel images={bannerUrls} />
+          ) : bannerUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={bannerUrl}
