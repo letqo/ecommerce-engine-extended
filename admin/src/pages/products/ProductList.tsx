@@ -148,9 +148,12 @@ export default function ProductList() {
               <tr><td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">No products found.</td></tr>
             ) : products.map((p) => {
               const price = p.variants?.[0]?.price
-              const inventory = p.variants?.reduce((s: number, v: any) => s + v.inventoryQty, 0) ?? 0
-              const oosCount = p.variants?.filter((v: any) => v.inventoryQty <= 0).length ?? 0
               const totalVariants = p.variants?.length ?? 0
+              // Made-to-order variants (trackInventory: false) have no real stock count —
+              // exclude them from the out-of-stock math instead of reading their qty=0 as a shortage.
+              const trackedVariants = p.variants?.filter((v: any) => v.trackInventory) ?? []
+              const inventory = trackedVariants.reduce((s: number, v: any) => s + v.inventoryQty, 0)
+              const oosCount = trackedVariants.filter((v: any) => v.inventoryQty <= 0).length
               const img = p.images?.[0]?.url
               return (
                 <tr key={p.id} className="hover:bg-gray-50 transition-colors">
@@ -186,12 +189,14 @@ export default function ProductList() {
                   </td>
                   <td className="px-4 py-3">{price != null ? formatCurrency(price) : '—'}</td>
                   <td className="px-4 py-3">
-                    {oosCount === totalVariants ? (
+                    {trackedVariants.length === 0 && totalVariants > 0 ? (
+                      <span className="text-muted-foreground" title="No stock is held — fulfilled per order">Made to order</span>
+                    ) : oosCount === trackedVariants.length ? (
                       <span className="inline-flex items-center gap-1 text-red-600 font-medium">
                         <AlertTriangle className="w-3.5 h-3.5" /> Out of stock
                       </span>
                     ) : oosCount > 0 ? (
-                      <span className="text-amber-600 font-medium" title={`${oosCount} of ${totalVariants} variants out of stock`}>
+                      <span className="text-amber-600 font-medium" title={`${oosCount} of ${trackedVariants.length} tracked variants out of stock`}>
                         {inventory} <span className="text-xs font-normal">({oosCount} oos)</span>
                       </span>
                     ) : (

@@ -218,7 +218,7 @@ router.get('/', async (req: AdminRequest, res: Response, next: NextFunction) => 
         orderBy: { createdAt: 'desc' },
         include: {
           images: { orderBy: { sortOrder: 'asc' }, take: 1 },
-          variants: { select: { price: true, inventoryQty: true } },
+          variants: { select: { price: true, inventoryQty: true, trackInventory: true } },
           category: { select: { name: true } },
           translations: true,
         },
