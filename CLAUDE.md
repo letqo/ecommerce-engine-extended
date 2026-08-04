@@ -56,12 +56,46 @@ Multi-store: `resolveStore` middleware sets `req.storeId` per request (header-ba
 - **Env vars with silent, plausible-looking defaults can mask a completely broken feature.** `STRIPE_WEBHOOK_SECRET` defaulted to `''` in `backend/src/config/env.ts` — nothing crashed, no error was ever logged anywhere visible, but every Stripe webhook event was silently rejected (signature can't match an empty secret), so **paid orders never flipped to `PAID`/`CONFIRMED`, ever**, since launch. Found 2026-08-03 by deliberately checking `railway variables` against what the code actually reads, not by an error surfacing on its own. Same category of bug as `EMAIL_FROM` defaulting to `noreply@precisie.eu` — worth deliberately auditing every `z.string().default(...)` in `env.ts` against what's actually set on Railway, since none of them fail loudly when missing.
 - **Never print a raw secret value to your own visible output** (a `railway variables --json` piped straight to a display, `cat .env`, etc.) — the harness's classifier will block it, and it's the right instinct anyway. To use a secret (e.g. calling an external API with it), write a script that reads it and uses it entirely inside a subprocess, printing only a redacted preview or the final result — see how `STRIPE_WEBHOOK_SECRET` was created this way on 2026-08-03 (read `STRIPE_SECRET_KEY` internally, called Stripe's API directly, set the result back on Railway, never echoed either secret).
 
+## Admin nav/routing — check both places when adding a page
+
+A page can exist as a real, working component and still be completely unreachable in the admin
+SPA if it's missing from either of two separate places: the route list in `admin/src/App.tsx`
+and the `nav` array in `admin/src/layouts/AdminLayout.tsx`. This happened to the Integrations
+page (CJ/AliExpress config + the new per-store supplier settings) — both the page and its
+backend API were real and working, but neither file referenced it, so it was unreachable by
+clicking anywhere in the live admin panel. Fixed 2026-08-03: added the import + `<Route
+path="integrations" .../>` to `App.tsx`, and `{ to: '/integrations', icon: Plug, label:
+'Integrations' }` to the `nav` array in `AdminLayout.tsx`. When adding any new admin page, check
+both files, not just one.
+
+## AliExpress connect flow exists in two places by design, not by accident
+
+`admin/src/pages/integrations/Integrations.tsx` and `admin/src/pages/supplier/ImportProducts.tsx`
+each have their own full "connect via OAuth code paste" UI. This looks like duplication but
+isn't a bug — both read/write the exact same per-store backend state (`Store.aliexpressAccessToken`
+/ `aliexpressTokenExpiry`, scoped by `req.storeId`) via the same three endpoints
+(`GET/POST /api/admin/supplier/aliexpress/status|exchange|token` in
+`backend/src/routes/admin/supplier.ts`). Connecting on either page immediately reflects as
+connected on the other — verified 2026-08-03. Import needs its own inline connect nudge so a
+user isn't blocked mid-search; Integrations is the general settings home. Leave both as-is
+unless asked to consolidate.
+
+## Next store idea (not started): headwear/accessories
+
+User is considering a second store (separate from STILL) around AliExpress-sourced hats/caps/
+beanies (vintage flat cap, trapper hat, hip-hop cap, skullie, butterfly-embroidery cap) plus a
+canvas backpack — a coherent "headwear/travel accessories" niche. A glasses-frames product from
+the same sourcing batch was recommended against (different customer intent/trust bar than
+headwear) — drop it or spin it into its own store later, don't fold it into this one. Nothing
+built yet; this is a niche decision only, made 2026-08-03.
+
 ## Where things stand (2026-08-03)
 
 - Phase 1+2 fulfillment (SupplierOrder split, retry/backoff, Fulfillment Queue admin page): **done**, verified.
 - STILL storefront theme matches its design mockup (hero device illustration, spec-strip, plate product cards, utility bar with live clock, etc.) — verified against the actual mockup source, not just a summary of it.
 - Supplier platform expansion (Printful/Gelato/BigBuy/WooBridge adapters, per-store supplier enablement, compliance profiles) — built overnight 2026-08-03 on a branch, merged and deployed to production the same day. See `OVERNIGHT_BUILD_NOTES.md` for the full list of judgment calls and explicit follow-ups (Gelato needs a print-asset model it doesn't have yet; no webhook *routes* are mounted for the new suppliers, only the parsing/verification logic; no automated tests exist in this repo at all).
 - **Stripe webhook fixed 2026-08-03** — `STRIPE_WEBHOOK_SECRET` is now set (test-mode endpoint `we_1U0MrLArnGPWOkHrmvr9rwGe`, created via the Stripe API, listening for `payment_intent.succeeded`/`payment_intent.payment_failed`). Before this, real checkouts never actually completed on the backend side — see the gotchas section above. `EMAIL_FROM_NAME` also fixed, now `STILL` instead of the generic default.
+- **Admin Integrations page fixed 2026-08-03** — was unreachable (see gotcha above), now wired into routing + sidebar nav and live.
 - **Checkout country dropdown — done, not yet merged.** Branch `feature/checkout-country-dropdown` (commit `3d70cf2`, built in a parallel session) ports the same fix already shipped in `my-store` (`f744c16`): free-text country input → a `<select>` built from `Store.targetMarkets`, localized via `Intl.DisplayNames`. Looks complete and correct; merge to `main` and deploy whenever ready.
 - **Not yet done**: `EMAIL_FROM` address still reads `noreply@precisie.eu` (only verified domain in the shared Resend account) — needs STILL's own custom domain to fix properly. VAT/IOSS handling (checkout charges $0 tax; the user is France-based, not yet IOSS-registered — this matters because fulfillment ships from outside the EU, so IOSS applies, not standard OSS, and only below the ¬150/parcel threshold). Custom domain. Live (non-test) Stripe keys — and note a **second, live-mode** webhook endpoint will need creating when that happens, the one that exists now is test-mode only.
 
