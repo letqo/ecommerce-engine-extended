@@ -9,6 +9,7 @@ import { SupplierAdapter, MarketAvailability } from '../../suppliers/types'
 import { computeMarketDeviation, buildDeliveryNote } from '../../suppliers/marketDeviation'
 import { isConfigurableSupplierKey, ConfigurableSupplierKey, SupplierSettings } from '../../suppliers/configurableTypes'
 import { CONFIGURABLE_SUPPLIERS } from '../../suppliers/configurableRegistry'
+import { uploadFile } from '../../services/storage'
 
 const router = Router()
 
@@ -17,16 +18,7 @@ const router = Router()
 // one of those requires a storeId and a lookup — this is that single branch point for both the
 // search and product-detail routes below, so they don't duplicate the store lookup + friendly
 // "not enabled" error.
-async function resolveAdapter(
-  storeId: string | undefined,
-  supplierName: string,
-  // Per-request settings overrides — currently just Gelato's `catalogUid`. Gelato has no
-  // "my products" concept (unlike Printful): search browses one fixed catalog (apparel, posters,
-  // ...), so a single per-store default would force switching Integrations settings every time
-  // the operator wants a different product type. Letting the search UI override it per-request
-  // means one Gelato connection can browse any of its catalogs without touching stored settings.
-  overrides: Record<string, string> = {}
-): Promise<SupplierAdapter> {
+async function resolveAdapter(storeId: string | undefined, supplierName: string): Promise<SupplierAdapter> {
   if (supplierName === 'cj' || supplierName === 'aliexpress') {
     const adapter = createAdapter(supplierName)
     if (storeId && 'withStore' in adapter) (adapter as any).withStore(storeId)
@@ -48,8 +40,7 @@ async function resolveAdapter(
       'SUPPLIER_NOT_CONFIGURED'
     )
   }
-  const settings = { ...(storeSupplier.settings as SupplierSettings ?? {}), ...overrides }
-  return getConfigurableAdapter(key as ConfigurableSupplierKey, settings)
+  return getConfigurableAdapter(key as ConfigurableSupplierKey, (storeSupplier.settings ?? {}) as SupplierSettings)
 }
 
 // ── AliExpress OAuth ──
@@ -195,22 +186,11 @@ router.get('/aliexpress/status', requireAdmin, async (req: AdminRequest, res: Re
 
 router.use(requireAdmin)
 
-// Gelato-only: lets the search UI list every catalog on the store's connected Gelato account
-// and pick between them, instead of being stuck with whatever `catalogUid` is saved in
-// Integrations. Calls Gelato's own List Catalogs endpoint live — no hardcoded catalog names.
-router.get('/gelato/catalogs', async (req: AdminRequest, res: Response, next: NextFunction) => {
-  try {
-    const adapter = await resolveAdapter(req.storeId, 'gelato') as any
-    const catalogs = await adapter.listCatalogs()
-    res.json({ success: true, data: catalogs })
-  } catch (err) { next(err) }
-})
-
 router.get('/search', async (req: AdminRequest, res: Response, next: NextFunction) => {
   try {
-    const { q, page = '1', supplier = 'cj', catalogUid } = req.query as { q?: string; page?: string; supplier?: string; catalogUid?: string }
+    const { q, page = '1', supplier = 'cj' } = req.query as { q?: string; page?: string; supplier?: string }
     if (!q?.trim()) return res.json({ success: true, data: { products: [], total: 0, page: 1 } })
-    const adapter = await resolveAdapter(req.storeId, supplier, catalogUid ? { catalogUid } : {})
+    const adapter = await resolveAdapter(req.storeId, supplier)
     const result = await adapter.searchProducts(q.trim(), parseInt(page))
     res.json({ success: true, data: result })
   } catch (err) { next(err) }
@@ -219,8 +199,7 @@ router.get('/search', async (req: AdminRequest, res: Response, next: NextFunctio
 router.get('/product/:supplierId', async (req: AdminRequest, res: Response, next: NextFunction) => {
   try {
     const supplier = (req.query.supplier as string) || 'cj'
-    const catalogUid = req.query.catalogUid as string | undefined
-    const adapter = await resolveAdapter(req.storeId, supplier, catalogUid ? { catalogUid } : {})
+    const adapter = await resolveAdapter(req.storeId, supplier)
     const product = await adapter.getProduct(req.params.supplierId)
 
     const store = req.storeId
@@ -250,6 +229,24 @@ router.get('/product/:supplierId', async (req: AdminRequest, res: Response, next
   } catch (err) { next(err) }
 })
 
+// Gelato's e-commerce product images are pre-signed S3 URLs that expire in ~24h (confirmed live
+// 2026-08-04 — X-Amz-Expires=86400 on every previewUrl). Fine for the search/preview step, but
+// storing that URL directly on a Product would leave the storefront showing a broken image once
+// it expires. Download and re-host through our own storage at import time instead, so what gets
+// saved is permanent. Best-effort: if a fetch fails, fall back to the original URL rather than
+// fail the whole import over one bad image.
+async function rehostIfExpiring(url: string, supplierName: string): Promise<string> {
+  if (supplierName !== 'gelato') return url
+  try {
+    const res = await axios.get(url, { responseType: 'arraybuffer' })
+    const contentType = String(res.headers['content-type'] ?? 'image/jpeg')
+    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg'
+    return await uploadFile(Buffer.from(res.data), `gelato-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`, contentType, 'products')
+  } catch {
+    return url
+  }
+}
+
 // Shared by the REST route and the setup-assistant tool dispatcher.
 export async function importSupplierProduct(storeId: string | undefined, body: any) {
   const { supplierId, supplierName, title, description, markup, images, variants, listVariantsIndividually, videoUrl, deliveryMinDays, deliveryMaxDays, shippingCost, categoryId, unavailableMarkets, deliveryNote } = body
@@ -278,6 +275,10 @@ export async function importSupplierProduct(storeId: string | undefined, body: a
   const configurableKey = supplierName.toUpperCase()
   const isConfigurable = isConfigurableSupplierKey(configurableKey)
 
+  const rehostedImages = await Promise.all(
+    (images as string[]).slice(0, 8).map((url: string) => rehostIfExpiring(url, supplierName))
+  )
+
   return prisma.product.create({
     data: {
       title,
@@ -296,7 +297,7 @@ export async function importSupplierProduct(storeId: string | undefined, body: a
       unavailableMarkets: Array.isArray(unavailableMarkets) ? unavailableMarkets : [],
       deliveryNote: typeof deliveryNote === 'string' && deliveryNote.trim() ? deliveryNote : null,
       images: {
-        create: (images as string[]).slice(0, 8).map((url: string, i: number) => ({
+        create: rehostedImages.map((url: string, i: number) => ({
           url,
           sortOrder: i,
         })),

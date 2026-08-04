@@ -50,7 +50,7 @@ export const CONFIGURABLE_SUPPLIERS: Record<ConfigurableSupplierKey, Configurabl
     key: 'GELATO',
     displayName: 'Gelato',
     description:
-      'Global print-on-demand with local production in 30+ countries — usually the shortest shipping distance for EU customers. Requires print-ready artwork per item.',
+      'Global print-on-demand with local production in 30+ countries — usually the shortest shipping distance for EU customers. Design products in your Gelato dashboard first (My Store → Add Product) — search here reads what you\'ve created there, the same way Printful does. Requires print-ready artwork per item.',
     docsUrl: 'https://dashboard.gelato.com/docs/',
     capabilities: {
       search: true,
@@ -67,14 +67,6 @@ export const CONFIGURABLE_SUPPLIERS: Record<ConfigurableSupplierKey, Configurabl
         help: 'Gelato Dashboard → Developer → API keys.',
         required: true,
         secret: true,
-      },
-      {
-        name: 'catalogUid',
-        label: 'Default catalog',
-        help: 'Which Gelato catalog product search browses, e.g. "posters", "apparel", "cards". Default: posters.',
-        required: false,
-        secret: false,
-        placeholder: 'posters',
       },
     ],
   },

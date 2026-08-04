@@ -80,14 +80,6 @@ export default function ImportProducts() {
   const [importError, setImportError] = useState('')
   const [searchError, setSearchError] = useState('')
 
-  // Gelato has no "my products" concept — search browses one catalog at a time (apparel,
-  // posters, cards, ...). Fetched live from Gelato's own List Catalogs endpoint so the picker
-  // never goes stale, rather than a hardcoded guess at catalog names.
-  const [gelatoCatalogs, setGelatoCatalogs] = useState<{ catalogUid: string; title: string }[]>([])
-  const [gelatoCatalogUid, setGelatoCatalogUid] = useState('')
-  const [gelatoCatalogsLoading, setGelatoCatalogsLoading] = useState(false)
-  const [gelatoCatalogsError, setGelatoCatalogsError] = useState('')
-
   // AliExpress connect flow
   const [showConnectFlow, setShowConnectFlow] = useState(false)
   const [authCode, setAuthCode] = useState('')
@@ -131,22 +123,6 @@ export default function ImportProducts() {
 
   const activeTab = tabs.find((t) => t.key === supplier)
 
-  // Fetch the real catalog list the first time the Gelato tab becomes usable — not on every
-  // render, and not for stores that never touch Gelato.
-  useEffect(() => {
-    if (supplier !== 'gelato' || !activeTab?.ready || gelatoCatalogs.length > 0 || gelatoCatalogsLoading) return
-    setGelatoCatalogsLoading(true)
-    setGelatoCatalogsError('')
-    api.get('/api/admin/supplier/gelato/catalogs')
-      .then((r) => {
-        const rows = r.data.data as { catalogUid: string; title: string }[]
-        setGelatoCatalogs(rows)
-        if (rows.length > 0) setGelatoCatalogUid((current) => current || rows[0].catalogUid)
-      })
-      .catch((e: any) => setGelatoCatalogsError(e.response?.data?.error?.message ?? 'Could not load Gelato catalogs'))
-      .finally(() => setGelatoCatalogsLoading(false))
-  }, [supplier, activeTab?.ready])
-
   const loadAliExpressUrl = async () => {
     if (!aliUrl.trim()) return
     setAliUrlError('')
@@ -163,14 +139,12 @@ export default function ImportProducts() {
     }
   }
 
-  const catalogParam = supplier === 'gelato' && gelatoCatalogUid ? `&catalogUid=${encodeURIComponent(gelatoCatalogUid)}` : ''
-
   const search = async (p = 1) => {
     if (!query.trim()) return
     setSearching(true)
     setSearchError('')
     try {
-      const res = await api.get(`/api/admin/supplier/search?q=${encodeURIComponent(query.trim())}&page=${p}&supplier=${supplier}${catalogParam}`)
+      const res = await api.get(`/api/admin/supplier/search?q=${encodeURIComponent(query.trim())}&page=${p}&supplier=${supplier}`)
       const incoming = res.data.data.products as SupplierProduct[]
       setResults(p === 1 ? incoming : [...results, ...incoming])
       setTotal(res.data.data.total ?? 0)
@@ -188,7 +162,7 @@ export default function ImportProducts() {
     setSelected(null)
     setLoadingDetail(true)
     try {
-      const res = await api.get(`/api/admin/supplier/product/${product.supplierId}?supplier=${supplier}${catalogParam}`)
+      const res = await api.get(`/api/admin/supplier/product/${product.supplierId}?supplier=${supplier}`)
       setSelected(res.data.data)
     } finally {
       setLoadingDetail(false)
@@ -428,31 +402,6 @@ export default function ImportProducts() {
             </div>
           ) : (
             <>
-              {supplier === 'gelato' && (
-                <div className="mb-2">
-                  {gelatoCatalogsError ? (
-                    <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{gelatoCatalogsError}</p>
-                  ) : (
-                    <>
-                      <label className="text-xs font-medium text-gray-600 mb-1 block">
-                        Catalog — Gelato has no "my products" list, it's one shared catalog per product type
-                      </label>
-                      <select
-                        value={gelatoCatalogUid}
-                        onChange={(e) => { setGelatoCatalogUid(e.target.value); setResults([]); setSelected(null); setTotal(0) }}
-                        disabled={gelatoCatalogsLoading || gelatoCatalogs.length === 0}
-                        className="w-full h-9 rounded-lg border border-gray-300 px-3 text-sm bg-white disabled:opacity-50"
-                      >
-                        {gelatoCatalogsLoading && <option>Loading catalogs…</option>}
-                        {!gelatoCatalogsLoading && gelatoCatalogs.length === 0 && <option>No catalogs found</option>}
-                        {gelatoCatalogs.map((c) => (
-                          <option key={c.catalogUid} value={c.catalogUid}>{c.title} ({c.catalogUid})</option>
-                        ))}
-                      </select>
-                    </>
-                  )}
-                </div>
-              )}
               <div className="flex gap-2">
                 <div className="relative flex-1">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />

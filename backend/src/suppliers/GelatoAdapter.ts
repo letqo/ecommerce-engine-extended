@@ -6,40 +6,27 @@ import {
 } from './types'
 import { SupplierSettings, requireSetting, optionalSetting } from './configurableTypes'
 
-// Gelato — global print-on-demand. Docs: https://dashboard.gelato.com/docs/
+// Gelato — global print-on-demand. Docs: https://dashboard.gelato.com/docs/ (blocked from
+// automated fetching — everything below was confirmed live, 2026-08-04, against a real account).
 //
 // Gelato splits its API across per-domain hosts rather than paths:
-//   orders   → https://order.gelatoapis.com   (v4)
-//   products → https://product.gelatoapis.com (v3)
+//   orders     → https://order.gelatoapis.com     (v4)
+//   catalog    → https://product.gelatoapis.com   (v3) — the universal blank-template catalog
+//   e-commerce → https://ecommerce.gelatoapis.com (v1) — the merchant's OWN created products
 // Auth is one API key sent as `X-API-KEY` on every request, per store.
+//
+// searchProducts/getProduct deliberately read the e-commerce API, not the catalog one. The
+// catalog API (product.gelatoapis.com) is Gelato's full universal template list — hundreds of
+// thousands of blank products (465k+ in "apparel" alone) with no working server-side filter
+// (every `filters` shape tried against the real API was silently ignored), so it's only useful
+// for *creating a brand-new design from a blank template*, not for finding a product the
+// merchant already made — that's exactly what the e-commerce "store products" API is for, the
+// same role Printful's `/store/products` plays for that adapter. Every product created via
+// Gelato's own dashboard ("My Store" → Add Product) shows up there with a real title, a real
+// description, a real preview image, and variants carrying the same productUid format the
+// catalog/order APIs use — so placeOrder needs no changes.
 const ORDER_BASE = 'https://order.gelatoapis.com'
-const PRODUCT_BASE = 'https://product.gelatoapis.com'
-
-// Confirmed live 2026-08-04: neither the search nor single-product endpoint returns a `title` —
-// products only carry a flat `attributes` object (key names vary a lot per catalog, e.g.
-// GarmentColor/GarmentSize for apparel, presumably PaperFormat/Orientation for posters). Without
-// this, the admin UI showed the raw productUid string as the title (e.g.
-// "apparel_product_gca_hat_gsc_beanie_gcu_baby_..."), which is exactly why search results looked
-// like meaningless noise. Blocklist is administrative/internal-sounding keys, not a per-catalog
-// allowlist, since there's no single set of "the good" attribute names across every catalog.
-const GELATO_ATTR_BLOCKLIST = /sku|status|^state$/i
-
-function readableGelatoAttributes(attributes: Record<string, unknown> | undefined): Record<string, string> {
-  if (!attributes) return {}
-  const out: Record<string, string> = {}
-  for (const [k, v] of Object.entries(attributes)) {
-    if (GELATO_ATTR_BLOCKLIST.test(k)) continue
-    if (typeof v !== 'string' || !v.trim()) continue
-    out[k] = v
-  }
-  return out
-}
-
-function humanizeGelatoTitle(attributes: Record<string, unknown> | undefined, fallback: string): string {
-  const parts = Object.values(readableGelatoAttributes(attributes))
-    .map((v) => v.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase()))
-  return parts.length > 0 ? parts.join(' · ') : fallback
-}
+const ECOMMERCE_BASE = 'https://ecommerce.gelatoapis.com'
 
 // Gelato identifies a sellable thing by `productUid` — a long descriptor string like
 // `apparel_product_gca_t-shirt_gsc_crewneck_gcu_unisex_...`. That is what we store in
@@ -48,17 +35,18 @@ export class GelatoAdapter implements SupplierAdapter {
   readonly name = 'gelato'
 
   private orderHttp: AxiosInstance
-  private productHttp: AxiosInstance
-  // Gelato's product search is scoped to one catalog (`apparel`, `posters`, ...). There is no
-  // cross-catalog keyword search, so the store picks which catalog its imports come from.
-  private catalogUid: string
+  private ecommerceHttp: AxiosInstance
+  // A Gelato account has exactly one e-commerce "store" object (confirmed live — GET /v1/stores
+  // returned a single entry, type "manual", created automatically the first time the API key is
+  // used to connect a custom/non-native storefront). Resolved lazily and cached, since every
+  // e-commerce call needs it and it never changes for the life of this adapter instance.
+  private storeIdPromise: Promise<string> | null = null
 
   constructor(config: SupplierSettings) {
     const apiKey = requireSetting(config, 'Gelato', 'apiKey')
-    this.catalogUid = optionalSetting(config, 'catalogUid') ?? 'posters'
     const headers = { 'X-API-KEY': apiKey, 'Content-Type': 'application/json' }
     this.orderHttp = axios.create({ baseURL: optionalSetting(config, 'orderBaseUrl') ?? ORDER_BASE, headers })
-    this.productHttp = axios.create({ baseURL: optionalSetting(config, 'productBaseUrl') ?? PRODUCT_BASE, headers })
+    this.ecommerceHttp = axios.create({ baseURL: optionalSetting(config, 'ecommerceBaseUrl') ?? ECOMMERCE_BASE, headers })
   }
 
   private async request<T>(http: AxiosInstance, method: 'GET' | 'POST' | 'PATCH', path: string, body?: object): Promise<T> {
@@ -72,77 +60,74 @@ export class GelatoAdapter implements SupplierAdapter {
     }
   }
 
-  // Not part of the shared SupplierAdapter interface — Gelato-specific, used to let the admin
-  // pick which catalog to browse (see the note on `catalogUid` above) instead of guessing at a
-  // hardcoded list of catalog names that could go stale.
-  async listCatalogs(): Promise<{ catalogUid: string; title: string }[]> {
-    const data = await this.request<any>(this.productHttp, 'GET', '/v3/catalogs')
-    // Confirmed live 2026-08-04: the real response is { data: [{ catalogUid, title, ... }] },
-    // not a bare array or { catalogs: [...] } as the published examples suggested.
-    const rows: any[] = Array.isArray(data) ? data : data?.data ?? data?.catalogs ?? []
-    return rows.map((r) => ({ catalogUid: String(r.catalogUid ?? r.uid ?? r.id), title: r.title ?? r.name ?? String(r.catalogUid ?? r.uid ?? r.id) }))
+  private async resolveStoreId(): Promise<string> {
+    if (!this.storeIdPromise) {
+      this.storeIdPromise = this.request<any>(this.ecommerceHttp, 'GET', '/v1/stores').then((data) => {
+        const store = (data?.stores ?? [])[0]
+        if (!store?.id) throw new Error('No Gelato store found on this account — connect a store at dashboard.gelato.com first.')
+        return String(store.id)
+      })
+    }
+    return this.storeIdPromise
   }
 
   async searchProducts(query: string, page = 1, pageSize = 20): Promise<SupplierSearchResult> {
-    const offset = (page - 1) * pageSize
-    const data = await this.request<any>(this.productHttp, 'POST', `/v3/catalogs/${encodeURIComponent(this.catalogUid)}/products:search`, {
-      limit: pageSize,
-      offset,
-    })
+    const storeId = await this.resolveStoreId()
+    // No documented limit/offset for this endpoint and a merchant's own product count is small
+    // (this is their catalog, not Gelato's) — fetch generously and paginate/filter client-side,
+    // the same pattern used elsewhere in this codebase for supplier lists too small to need
+    // real server-side paging.
+    const data = await this.request<any>(this.ecommerceHttp, 'GET', `/v1/stores/${storeId}/products?limit=250`)
     const rows: any[] = data?.products ?? []
-    // The catalog search filters by structured product attributes, not free text, so a
-    // keyword is applied client-side over the returned page — matched against both the uid
-    // (which often embeds descriptive slugs) and the readable attribute values, since neither
-    // alone reliably contains what an operator would type.
     const needle = query.trim().toLowerCase()
-    const matched = needle
-      ? rows.filter((r) => {
-          if (String(r.productUid ?? '').toLowerCase().includes(needle)) return true
-          return Object.values(readableGelatoAttributes(r.attributes)).some((v) => v.toLowerCase().includes(needle))
-        })
-      : rows
+    const matched = needle ? rows.filter((r) => String(r.title ?? '').toLowerCase().includes(needle)) : rows
+
+    const start = (page - 1) * pageSize
+    const pageRows = matched.slice(start, start + pageSize)
 
     return {
-      products: matched.map((r) => ({
-        supplierId: String(r.productUid),
+      products: pageRows.map((r) => ({
+        supplierId: String(r.id),
         supplierName: 'gelato',
-        title: humanizeGelatoTitle(r.attributes, r.productUid ?? ''),
-        description: '',
-        images: [],
+        title: r.title ?? '',
+        description: r.description ?? '',
+        images: r.previewUrl ? [r.previewUrl] : [],
         variants: [],
-        categoryName: this.catalogUid,
       })),
-      total: data?.hits?.attributeHits ? matched.length : matched.length,
+      total: matched.length,
       page,
     }
   }
 
   async getProduct(supplierId: string): Promise<SupplierProduct> {
-    const data = await this.request<any>(this.productHttp, 'GET', `/v3/products/${encodeURIComponent(supplierId)}`)
-    // A Gelato "product" IS a fully-specified variant (size/colour/paper are baked into the
-    // uid), so it maps to exactly one SupplierVariant rather than a variant list. Real shape
-    // confirmed live 2026-08-04: a flat `attributes` object (no `productAttributes` array, no
-    // `title` field at all — see humanizeGelatoTitle above).
-    const title = humanizeGelatoTitle(data?.attributes, data?.productUid ?? supplierId)
-    const variants: SupplierVariant[] = [
-      {
-        supplierId: String(data?.productUid ?? supplierId),
-        title,
-        options: readableGelatoAttributes(data?.attributes),
-        // The catalog endpoint describes the product, not its price — pricing comes from the
-        // separate Prices API / order quote. Import seeds 0 and the quote fills it in.
-        costPrice: 0,
-      },
-    ]
+    const storeId = await this.resolveStoreId()
+    const data = await this.request<any>(this.ecommerceHttp, 'GET', `/v1/stores/${storeId}/products/${encodeURIComponent(supplierId)}`)
+
+    // previewUrl (and any productImages) are pre-signed S3 URLs that expire in ~24h — the caller
+    // (importSupplierProduct) re-hosts them via our own storage before saving, so this doesn't
+    // matter for the search/preview step, only for what ends up permanently stored.
+    const images: string[] = [data?.previewUrl, ...((data?.productImages ?? []) as any[]).map((i) => i?.url ?? i?.previewUrl ?? (typeof i === 'string' ? i : null))]
+      .filter((u): u is string => typeof u === 'string' && u.length > 0)
+
+    const variants: SupplierVariant[] = (data?.variants ?? []).map((v: any) => ({
+      // The productUid (not the internal variant id) is what placeOrder sends to Gelato, so it's
+      // what gets persisted to ProductVariant.supplierVariantRef.
+      supplierId: String(v.productUid),
+      title: v.title ?? String(v.productUid),
+      options: {},
+      // Store products carry no per-variant price either — same limitation as the catalog API,
+      // documented at import time via the admin UI's "didn't return a cost" notice.
+      costPrice: 0,
+    }))
 
     return {
-      supplierId: String(data?.productUid ?? supplierId),
+      supplierId: String(data?.id ?? supplierId),
       supplierName: 'gelato',
-      title,
-      description: '',
-      images: [],
+      title: data?.title ?? '',
+      description: data?.description ?? '',
+      images,
       variants,
-      categoryName: this.catalogUid,
+      categoryName: data?.productType ?? undefined,
     }
   }
 
