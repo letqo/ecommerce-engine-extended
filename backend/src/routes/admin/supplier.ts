@@ -17,7 +17,16 @@ const router = Router()
 // one of those requires a storeId and a lookup — this is that single branch point for both the
 // search and product-detail routes below, so they don't duplicate the store lookup + friendly
 // "not enabled" error.
-async function resolveAdapter(storeId: string | undefined, supplierName: string): Promise<SupplierAdapter> {
+async function resolveAdapter(
+  storeId: string | undefined,
+  supplierName: string,
+  // Per-request settings overrides — currently just Gelato's `catalogUid`. Gelato has no
+  // "my products" concept (unlike Printful): search browses one fixed catalog (apparel, posters,
+  // ...), so a single per-store default would force switching Integrations settings every time
+  // the operator wants a different product type. Letting the search UI override it per-request
+  // means one Gelato connection can browse any of its catalogs without touching stored settings.
+  overrides: Record<string, string> = {}
+): Promise<SupplierAdapter> {
   if (supplierName === 'cj' || supplierName === 'aliexpress') {
     const adapter = createAdapter(supplierName)
     if (storeId && 'withStore' in adapter) (adapter as any).withStore(storeId)
@@ -39,7 +48,8 @@ async function resolveAdapter(storeId: string | undefined, supplierName: string)
       'SUPPLIER_NOT_CONFIGURED'
     )
   }
-  return getConfigurableAdapter(key as ConfigurableSupplierKey, (storeSupplier.settings ?? {}) as SupplierSettings)
+  const settings = { ...(storeSupplier.settings as SupplierSettings ?? {}), ...overrides }
+  return getConfigurableAdapter(key as ConfigurableSupplierKey, settings)
 }
 
 // ── AliExpress OAuth ──
@@ -185,11 +195,22 @@ router.get('/aliexpress/status', requireAdmin, async (req: AdminRequest, res: Re
 
 router.use(requireAdmin)
 
+// Gelato-only: lets the search UI list every catalog on the store's connected Gelato account
+// and pick between them, instead of being stuck with whatever `catalogUid` is saved in
+// Integrations. Calls Gelato's own List Catalogs endpoint live — no hardcoded catalog names.
+router.get('/gelato/catalogs', async (req: AdminRequest, res: Response, next: NextFunction) => {
+  try {
+    const adapter = await resolveAdapter(req.storeId, 'gelato') as any
+    const catalogs = await adapter.listCatalogs()
+    res.json({ success: true, data: catalogs })
+  } catch (err) { next(err) }
+})
+
 router.get('/search', async (req: AdminRequest, res: Response, next: NextFunction) => {
   try {
-    const { q, page = '1', supplier = 'cj' } = req.query as { q?: string; page?: string; supplier?: string }
+    const { q, page = '1', supplier = 'cj', catalogUid } = req.query as { q?: string; page?: string; supplier?: string; catalogUid?: string }
     if (!q?.trim()) return res.json({ success: true, data: { products: [], total: 0, page: 1 } })
-    const adapter = await resolveAdapter(req.storeId, supplier)
+    const adapter = await resolveAdapter(req.storeId, supplier, catalogUid ? { catalogUid } : {})
     const result = await adapter.searchProducts(q.trim(), parseInt(page))
     res.json({ success: true, data: result })
   } catch (err) { next(err) }
@@ -198,7 +219,8 @@ router.get('/search', async (req: AdminRequest, res: Response, next: NextFunctio
 router.get('/product/:supplierId', async (req: AdminRequest, res: Response, next: NextFunction) => {
   try {
     const supplier = (req.query.supplier as string) || 'cj'
-    const adapter = await resolveAdapter(req.storeId, supplier)
+    const catalogUid = req.query.catalogUid as string | undefined
+    const adapter = await resolveAdapter(req.storeId, supplier, catalogUid ? { catalogUid } : {})
     const product = await adapter.getProduct(req.params.supplierId)
 
     const store = req.storeId

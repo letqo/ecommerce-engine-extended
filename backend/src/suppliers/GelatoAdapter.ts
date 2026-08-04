@@ -46,6 +46,15 @@ export class GelatoAdapter implements SupplierAdapter {
     }
   }
 
+  // Not part of the shared SupplierAdapter interface — Gelato-specific, used to let the admin
+  // pick which catalog to browse (see the note on `catalogUid` above) instead of guessing at a
+  // hardcoded list of catalog names that could go stale.
+  async listCatalogs(): Promise<{ catalogUid: string; title: string }[]> {
+    const data = await this.request<any>(this.productHttp, 'GET', '/v3/catalogs')
+    const rows: any[] = Array.isArray(data) ? data : data?.catalogs ?? []
+    return rows.map((r) => ({ catalogUid: String(r.catalogUid ?? r.uid ?? r.id), title: r.title ?? r.name ?? String(r.catalogUid ?? r.uid ?? r.id) }))
+  }
+
   async searchProducts(query: string, page = 1, pageSize = 20): Promise<SupplierSearchResult> {
     const offset = (page - 1) * pageSize
     const data = await this.request<any>(this.productHttp, 'POST', `/v3/catalogs/${encodeURIComponent(this.catalogUid)}/products:search`, {
