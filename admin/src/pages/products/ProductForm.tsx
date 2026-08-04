@@ -23,6 +23,8 @@ const variantSchema = z.object({
   compareAtPrice: z.coerce.number().optional().nullable(),
   costPerItem: z.coerce.number().optional().nullable(),
   inventoryQty: z.coerce.number().int().default(0),
+  trackInventory: z.boolean().default(true),
+  allowBackorder: z.boolean().default(false),
   sku: z.string().optional().nullable(),
   isDefault: z.boolean().default(false),
   options: z.record(z.string()).default({}),
@@ -101,7 +103,7 @@ export default function ProductForm() {
 
   const { register, handleSubmit, control, reset, setValue, getValues, watch, formState: { errors } } = useForm<FormData>({
     resolver: zodResolver(schema),
-    defaultValues: { status: 'DRAFT', isFeatured: false, listVariantsIndividually: false, variants: [{ title: 'Default', price: 0, inventoryQty: 0, isDefault: true, options: {} }], images: [], printFiles: [], translations: emptyTranslations() },
+    defaultValues: { status: 'DRAFT', isFeatured: false, listVariantsIndividually: false, variants: [{ title: 'Default', price: 0, inventoryQty: 0, trackInventory: true, allowBackorder: false, isDefault: true, options: {} }], images: [], printFiles: [], translations: emptyTranslations() },
   })
 
   const { fields: variantFields, append: addVariant, remove: removeVariant } = useFieldArray({ control, name: 'variants' })
@@ -381,7 +383,7 @@ export default function ProductForm() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between">
                 <CardTitle>Variants & Pricing</CardTitle>
-                <Button type="button" variant="outline" size="sm" onClick={() => addVariant({ title: 'New variant', price: 0, inventoryQty: 0, isDefault: false, options: {} })}>
+                <Button type="button" variant="outline" size="sm" onClick={() => addVariant({ title: 'New variant', price: 0, inventoryQty: 0, trackInventory: true, allowBackorder: false, isDefault: false, options: {} })}>
                   <Plus className="w-3.5 h-3.5" /> Add variant
                 </Button>
               </CardHeader>
@@ -421,10 +423,26 @@ export default function ProductForm() {
                           <p className="text-xs text-muted-foreground">Includes estimated supplier shipping, not just item cost.</p>
                         )}
                       </div>
-                      <div className="space-y-1.5">
-                        <Label>Inventory qty</Label>
-                        <Input type="number" placeholder="0" {...register(`variants.${i}.inventoryQty`)} />
+                      <div className="space-y-1.5 col-span-2 flex items-center gap-2">
+                        <input type="checkbox" id={`track-${i}`} {...register(`variants.${i}.trackInventory`)} className="rounded" />
+                        <Label htmlFor={`track-${i}`}>Track inventory for this variant</Label>
                       </div>
+                      {watch(`variants.${i}.trackInventory`) ? (
+                        <>
+                          <div className="space-y-1.5">
+                            <Label>Inventory qty</Label>
+                            <Input type="number" placeholder="0" {...register(`variants.${i}.inventoryQty`)} />
+                          </div>
+                          <div className="space-y-1.5 flex items-end gap-2 pb-2">
+                            <input type="checkbox" id={`backorder-${i}`} {...register(`variants.${i}.allowBackorder`)} className="rounded" />
+                            <Label htmlFor={`backorder-${i}`}>Allow purchase when out of stock</Label>
+                          </div>
+                        </>
+                      ) : (
+                        <p className="text-xs text-muted-foreground col-span-2">
+                          No stock count is shown. Always purchasable — use this for made-to-order or drop-shipped items with no held inventory.
+                        </p>
+                      )}
                     </div>
                   </div>
                 ))}
