@@ -22,8 +22,16 @@ app.use(cors({ origin: allowedOrigins, credentials: true }))
 
 import stripeWebhookRoutes from './routes/webhooks/stripe'
 import cjWebhookRoutes from './routes/webhooks/cj'
+import printfulWebhookRoutes from './routes/webhooks/printful'
+import wooWebhookRoutes from './routes/webhooks/woo'
 app.use('/api/webhooks/stripe', express.raw({ type: 'application/json' }), stripeWebhookRoutes)
-app.use('/api/webhooks/cj', cjWebhookRoutes)
+// CJ's route reads req.body as parsed JSON — needs its own parser since it's mounted ahead of
+// the global one below (was missing entirely until now, so every CJ webhook silently no-opped).
+app.use('/api/webhooks/cj', express.json({ limit: '2mb' }), cjWebhookRoutes)
+// Printful doesn't sign webhooks, so parsed JSON is fine. WooCommerce does (HMAC over the raw
+// body), so its route needs the raw bytes — see routes/webhooks/woo.ts.
+app.use('/api/webhooks/printful/:storeId', express.json({ limit: '2mb' }), printfulWebhookRoutes)
+app.use('/api/webhooks/woo/:storeId', express.raw({ type: 'application/json', limit: '2mb' }), wooWebhookRoutes)
 
 app.use(express.json({ limit: '10mb' }))
 app.use(express.urlencoded({ extended: true }))

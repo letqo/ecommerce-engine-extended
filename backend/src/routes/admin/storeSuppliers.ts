@@ -3,6 +3,7 @@ import { prisma } from '../../config/database'
 import { Prisma } from '@prisma/client'
 import { requireAdmin, AdminRequest } from '../../middleware/auth'
 import { createError } from '../../middleware/errorHandler'
+import { env } from '../../config/env'
 import { z } from 'zod'
 import { listConfigurableSuppliers, CONFIGURABLE_SUPPLIERS } from '../../suppliers/configurableRegistry'
 import {
@@ -47,6 +48,19 @@ function isMaskedValue(value: string): boolean {
   return value.startsWith('••••')
 }
 
+// URL path segment each webhook-capable supplier's route is mounted under — see app.ts.
+// Only PRINTFUL and WOO_BRIDGE currently have a route (Gelato/BigBuy don't support webhooks).
+const WEBHOOK_PATH_SEGMENT: Partial<Record<ConfigurableSupplierKey, string>> = {
+  PRINTFUL: 'printful',
+  WOO_BRIDGE: 'woo',
+}
+
+function webhookUrlFor(key: ConfigurableSupplierKey, storeId: string): string | undefined {
+  const segment = WEBHOOK_PATH_SEGMENT[key]
+  if (!segment) return undefined
+  return `${env.BACKEND_URL}/api/webhooks/${segment}/${storeId}`
+}
+
 // GET /api/admin/store-suppliers
 // Every configurable supplier the platform knows about, each annotated with this store's
 // enablement state and (redacted) settings. The admin Integrations page renders straight from
@@ -77,6 +91,7 @@ router.get('/', async (req: AdminRequest, res: Response, next: NextFunction) => 
         configured: missingRequired.length === 0,
         missingRequired,
         settings: redactSettings(settings),
+        webhookUrl: webhookUrlFor(meta.key, storeId),
         updatedAt: row?.updatedAt ?? null,
       }
     })

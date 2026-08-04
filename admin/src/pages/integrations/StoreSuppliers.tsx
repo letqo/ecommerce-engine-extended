@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Check, Loader2, Eye, EyeOff, ExternalLink } from 'lucide-react'
+import { Check, Loader2, Eye, EyeOff, ExternalLink, Copy } from 'lucide-react'
 
 // Per-store supplier integrations (Printful, Gelato, BigBuy, and the generic WooCommerce
 // bridge). Everything on this screen — which suppliers exist, what each can do, which settings
@@ -40,6 +40,7 @@ interface StoreSupplier {
   configured: boolean
   missingRequired: string[]
   settings: Record<string, string>
+  webhookUrl?: string
   updatedAt: string | null
 }
 
@@ -95,6 +96,14 @@ function SupplierCard({ supplier, onSaved }: { supplier: StoreSupplier; onSaved:
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState('')
+  const [urlCopied, setUrlCopied] = useState(false)
+
+  const copyWebhookUrl = () => {
+    if (!supplier.webhookUrl) return
+    navigator.clipboard.writeText(supplier.webhookUrl)
+    setUrlCopied(true)
+    setTimeout(() => setUrlCopied(false), 2000)
+  }
 
   useEffect(() => { setValues({ ...supplier.settings }) }, [supplier.settings])
 
@@ -202,6 +211,24 @@ function SupplierCard({ supplier, onSaved }: { supplier: StoreSupplier; onSaved:
                 {field.help && <p className="text-xs text-muted-foreground">{field.help}</p>}
               </div>
             ))}
+
+            {supplier.webhookUrl && (
+              <div className="space-y-1.5">
+                <Label>Webhook URL</Label>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-xs bg-gray-100 rounded-lg px-3 py-2 overflow-x-auto whitespace-nowrap">
+                    {supplier.webhookUrl}
+                  </code>
+                  <Button type="button" variant="outline" size="sm" onClick={copyWebhookUrl} className="shrink-0">
+                    {urlCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Paste this into {supplier.displayName}'s webhook settings so shipping updates arrive automatically
+                  instead of waiting for the periodic sync.
+                </p>
+              </div>
+            )}
 
             <p className="text-xs text-muted-foreground">
               Saved keys are never shown again — an existing one appears as ••••1234. Leave it as-is to keep it,

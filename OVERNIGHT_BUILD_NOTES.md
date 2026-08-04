@@ -156,6 +156,11 @@ Products must also be tagged: `Product.supplierKey` set to the supplier, and eac
 
 ## Explicit follow-ups
 
+> **Status update, 2026-08-04:** items 1, 4, and 7 below are done — see `CLAUDE.md`'s "Where
+> things stand" section for what changed and why. Left as originally written below for the
+> historical record of what this overnight session did and didn't finish; don't trust this list
+> over `CLAUDE.md` for current status.
+
 1. **Gelato print files.** `GelatoAdapter.placeOrder` has a `TODO(real-docs-needed)`: Gelato
    needs a `files: [{ type, url }]` array per item, and this platform has no print-asset model
    (products carry photos, not print-ready artwork). Orders for products that require a file
