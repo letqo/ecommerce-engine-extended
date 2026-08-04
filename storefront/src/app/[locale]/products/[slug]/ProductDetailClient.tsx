@@ -170,7 +170,7 @@ function ProductDetailInner() {
             <div className="theme-pdp-bezel">
               <div className="theme-pdp-screen relative">
                 <span className="theme-pdp-screen-tag">{String(selectedImage + 1).padStart(2, '0')} / {String(product.images.length).padStart(2, '0')}</span>
-                <Image src={activeImage} alt={product.images[selectedImage]?.altText ?? product.title} width={800} height={1000} className="w-full h-full object-cover" />
+                <Image src={activeImage} alt={product.images[selectedImage]?.altText ?? product.title} width={800} height={1000} className="w-full h-full object-contain" />
               </div>
             </div>
             {product.images.length > 1 && (
