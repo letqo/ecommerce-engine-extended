@@ -53,7 +53,8 @@ async function main() {
     )
   }, TWENTY_FOUR_HOURS)
 
-  // Tracking sync — polls AliExpress for tracking (CJ uses webhooks), runs every 6 hours
+  // Tracking sync — polls AliExpress + Printful/Gelato/BigBuy/WooBridge for tracking
+  // (CJ uses webhooks), runs every 6 hours
   const SIX_HOURS = 6 * 60 * 60 * 1000
   setInterval(() => {
     import('./services/trackingSync').then(({ runTrackingSync }) =>

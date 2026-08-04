@@ -1,6 +1,8 @@
 import { prisma } from '../config/database'
 import { CJAdapter } from '../suppliers/CJAdapter'
 import { AliExpressAdapter } from '../suppliers/AliExpressAdapter'
+import { getConfigurableAdapter } from '../suppliers/registry'
+import { CONFIGURABLE_SUPPLIER_KEYS, ConfigurableSupplierKey, SupplierSettings } from '../suppliers/configurableTypes'
 import { recomputeOrderFulfillment } from './supplierOrderFulfillment'
 
 interface TrackingSyncResult {
@@ -17,6 +19,14 @@ export async function runTrackingSync(): Promise<TrackingSyncResult> {
 
   // AliExpress — batch query all pending parcels at once
   await syncAliExpressBatch(result)
+
+  // Printful/Gelato/BigBuy/WooBridge have no webhook route mounted yet (Printful/WooBridge
+  // could sign or otherwise authenticate one, Gelato/BigBuy don't support webhooks at all per
+  // configurableRegistry.ts) — polling is the only way any of them get tracking back today.
+  // Every one of them implements getOrderStatus, so this is a single generic pass.
+  for (const key of CONFIGURABLE_SUPPLIER_KEYS) {
+    await syncConfigurableSupplier(key, result)
+  }
 
   if (result.checked > 0) {
     console.log(`[TrackingSync] Done — checked: ${result.checked}, updated: ${result.updated}, errors: ${result.errors}`)
@@ -107,6 +117,55 @@ async function syncAliExpressBatch(result: TrackingSyncResult) {
       }
     } catch (err: any) {
       console.error(`[TrackingSync] AliExpress batch error for store ${storeId}:`, err.message)
+      result.errors++
+    }
+  }
+}
+
+async function syncConfigurableSupplier(key: ConfigurableSupplierKey, result: TrackingSyncResult) {
+  const supplierOrders = await prisma.supplierOrder.findMany({
+    where: { supplierKey: key, status: 'SUBMITTED', trackingNumber: null, externalOrderId: { not: null } },
+    select: { id: true, externalOrderId: true, storeId: true, order: { select: { orderNumber: true } } },
+  })
+  if (supplierOrders.length === 0) return
+
+  // Each store has its own credentials — group so we build one adapter per store, not per parcel.
+  const byStore = new Map<string, typeof supplierOrders>()
+  for (const so of supplierOrders) {
+    if (!so.storeId) continue // a configurable-supplier parcel always has a storeId; skip if data is inconsistent
+    if (!byStore.has(so.storeId)) byStore.set(so.storeId, [])
+    byStore.get(so.storeId)!.push(so)
+  }
+
+  for (const [storeId, storeSupplierOrders] of byStore) {
+    try {
+      const storeSupplier = await prisma.storeSupplier.findUnique({
+        where: { storeId_supplierKey: { storeId, supplierKey: key } },
+      })
+      if (!storeSupplier?.enabled) continue // disabled since submission — nothing to poll with
+
+      const adapter = getConfigurableAdapter(key, (storeSupplier.settings ?? {}) as SupplierSettings)
+
+      for (const so of storeSupplierOrders) {
+        result.checked++
+        try {
+          const info = await adapter.getOrderStatus(so.externalOrderId!)
+          if (!info.trackingNumber) continue
+
+          await updateSupplierOrderWithTracking(so.id, {
+            trackingNumber: info.trackingNumber,
+            trackingUrl: info.trackingUrl,
+            carrier: info.carrier,
+            externalStatus: info.status,
+          })
+          result.updated++
+        } catch (err: any) {
+          console.error(`[TrackingSync] ${key} failed for #${so.order.orderNumber}:`, err.message)
+          result.errors++
+        }
+      }
+    } catch (err: any) {
+      console.error(`[TrackingSync] ${key} batch error for store ${storeId}:`, err.message)
       result.errors++
     }
   }

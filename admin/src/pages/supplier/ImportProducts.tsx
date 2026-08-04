@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Search, Download, PackagePlus, ExternalLink, Link2, CheckCircle2, AlertCircle, Eye, EyeOff, TriangleAlert } from 'lucide-react'
+import { Search, Download, PackagePlus, ExternalLink, Link2, CheckCircle2, AlertCircle, Eye, EyeOff, TriangleAlert, Settings } from 'lucide-react'
 
 const AE_OAUTH_URL = `https://api-sg.aliexpress.com/oauth/authorize?response_type=code&force_auth=true&redirect_uri=https://example.com&client_id=537274`
 
@@ -31,16 +32,40 @@ interface SupplierProduct {
   shippingCost?: number
 }
 
-const SUPPLIERS = [
+interface SupplierCapabilities {
+  search: boolean
+  productImport: boolean
+  orderSubmission: boolean
+  trackingPolling: boolean
+  webhooks: boolean
+  marketAvailability: boolean
+}
+
+interface ConfigurableSupplierRow {
+  key: string
+  displayName: string
+  capabilities: SupplierCapabilities
+  enabled: boolean
+  configured: boolean
+}
+
+// CJ and AliExpress are the two built-in suppliers with dedicated flows (CJ needs nothing to
+// connect; AliExpress needs the OAuth/paste-code dance below). Every other supplier
+// (Printful/Gelato/BigBuy/WooBridge, and any added later) is "configurable" — set up per store
+// in Admin → Integrations — and its tab here is driven entirely by GET /store-suppliers, so a
+// newly-enabled supplier just appears with no frontend change.
+const BUILTIN_SUPPLIERS = [
   { key: 'cj', label: 'CJ Dropshipping' },
   { key: 'aliexpress', label: 'AliExpress' },
 ]
 
 export default function ImportProducts() {
+  const navigate = useNavigate()
   const [supplier, setSupplier] = useState('cj')
   const [aliConnected, setAliConnected] = useState<boolean | null>(null)
   const [aliUrl, setAliUrl] = useState('')
   const [aliUrlError, setAliUrlError] = useState('')
+  const [configurableSuppliers, setConfigurableSuppliers] = useState<ConfigurableSupplierRow[]>([])
   const [query, setQuery] = useState('')
   const [results, setResults] = useState<SupplierProduct[]>([])
   const [total, setTotal] = useState(0)
@@ -68,12 +93,35 @@ export default function ImportProducts() {
       const val = r.data.data?.defaultImportMarkup
       if (typeof val === 'number' && val > 0) setMarkup(val)
     })
+    api.get('/api/admin/store-suppliers').then((r) => {
+      const rows = (r.data.data as any[]).map((s) => ({
+        key: s.key as string,
+        displayName: s.displayName as string,
+        capabilities: s.capabilities as SupplierCapabilities,
+        enabled: s.enabled as boolean,
+        configured: s.configured as boolean,
+      }))
+      setConfigurableSuppliers(rows)
+    })
     // Show success banner if redirected back from OAuth
     if (window.location.search.includes('aliexpress=connected')) {
       setSupplier('aliexpress')
       window.history.replaceState({}, '', window.location.pathname)
     }
   }, [])
+
+  const tabs = useMemo(() => [
+    ...BUILTIN_SUPPLIERS.map((s) => ({ ...s, kind: 'builtin' as const, ready: true, capabilities: null as SupplierCapabilities | null })),
+    ...configurableSuppliers.map((s) => ({
+      key: s.key.toLowerCase(),
+      label: s.displayName,
+      kind: 'configurable' as const,
+      ready: s.enabled && s.configured,
+      capabilities: s.capabilities,
+    })),
+  ], [configurableSuppliers])
+
+  const activeTab = tabs.find((t) => t.key === supplier)
 
   const loadAliExpressUrl = async () => {
     if (!aliUrl.trim()) return
@@ -174,6 +222,19 @@ export default function ImportProducts() {
   const landedCost = lowestCost + shippingCost
   const suggestedPrice = Math.round(landedCost * markup * 100) / 100
 
+  // BigBuy has no keyword search — the one lookup it supports is by exact SKU. Every other
+  // searchable supplier (CJ, WooBridge, and Printful/Gelato with their catalog-scoped caveats)
+  // gets the normal catalog-search copy.
+  const searchIsExactLookup = activeTab?.capabilities?.search === false
+
+  const switchSupplier = (key: string) => {
+    setSupplier(key)
+    setResults([])
+    setSelected(null)
+    setTotal(0)
+    setSearchError('')
+  }
+
   return (
     <div className="flex h-screen overflow-hidden">
       {/* Left: search + grid */}
@@ -182,48 +243,27 @@ export default function ImportProducts() {
           <h1 className="text-2xl font-bold mb-1">Import Products</h1>
 
           {/* Supplier selector */}
-          <div className="flex gap-2 mb-4">
-            {SUPPLIERS.map((s) => (
+          <div className="flex gap-2 mb-4 flex-wrap">
+            {tabs.map((s) => (
               <button
                 key={s.key}
                 type="button"
-                onClick={() => { setSupplier(s.key); setResults([]); setSelected(null); setTotal(0) }}
-                className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                onClick={() => switchSupplier(s.key)}
+                className={`relative px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
                   supplier === s.key
                     ? 'bg-black text-white border-black'
                     : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
                 }`}
               >
                 {s.label}
+                {s.kind === 'configurable' && !s.ready && (
+                  <span className="absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-amber-400 border-2 border-white" title="Not set up yet" />
+                )}
               </button>
             ))}
           </div>
 
-          {supplier === 'cj' ? (
-            <>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <Input
-                    value={query}
-                    onChange={(e) => setQuery(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && search(1)}
-                    placeholder="Search CJ Dropshipping catalog…"
-                    className="pl-9"
-                  />
-                </div>
-                <Button onClick={() => search(1)} disabled={searching || !query.trim()}>
-                  {searching ? 'Searching…' : 'Search'}
-                </Button>
-              </div>
-              {total > 0 && (
-                <p className="text-xs text-muted-foreground mt-2">{total.toLocaleString()} products found on CJ</p>
-              )}
-              {searchError && (
-                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">{searchError}</p>
-              )}
-            </>
-          ) : (
+          {supplier === 'aliexpress' ? (
             <div className="space-y-3">
               {/* Connection status */}
               {aliConnected === true && (
@@ -344,6 +384,51 @@ export default function ImportProducts() {
               </div>
               {aliUrlError && <p className="text-xs text-red-600">{aliUrlError}</p>}
             </div>
+          ) : activeTab?.kind === 'configurable' && !activeTab.ready ? (
+            <div className="flex items-center justify-between bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+              <div className="flex items-center gap-2 text-sm text-amber-800">
+                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                {activeTab.label} isn't set up yet for this store
+              </div>
+              <Button
+                size="sm"
+                variant="outline"
+                className="border-amber-400 text-amber-800 hover:bg-amber-100 gap-1.5"
+                onClick={() => navigate('/integrations')}
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Set up in Integrations
+              </Button>
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  <Input
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && search(1)}
+                    placeholder={searchIsExactLookup ? 'Enter the exact SKU…' : `Search ${activeTab?.label ?? 'the'} catalog…`}
+                    className="pl-9"
+                  />
+                </div>
+                <Button onClick={() => search(1)} disabled={searching || !query.trim()}>
+                  {searching ? (searchIsExactLookup ? 'Looking up…' : 'Searching…') : (searchIsExactLookup ? 'Look up' : 'Search')}
+                </Button>
+              </div>
+              {searchIsExactLookup && (
+                <p className="text-xs text-muted-foreground mt-2">
+                  {activeTab?.label} doesn't support catalog search — look up one product at a time by its exact SKU.
+                </p>
+              )}
+              {total > 0 && !searchIsExactLookup && (
+                <p className="text-xs text-muted-foreground mt-2">{total.toLocaleString()} products found on {activeTab?.label}</p>
+              )}
+              {searchError && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mt-2">{searchError}</p>
+              )}
+            </>
           )}
         </div>
 
@@ -393,7 +478,7 @@ export default function ImportProducts() {
                 ))}
               </div>
 
-              {results.length < total && (
+              {results.length < total && !searchIsExactLookup && (
                 <div className="text-center mt-8">
                   <Button variant="outline" onClick={() => search(page + 1)} disabled={searching}>
                     {searching ? 'Loading…' : `Load more (${results.length} / ${total})`}
@@ -403,11 +488,11 @@ export default function ImportProducts() {
             </>
           )}
 
-          {!searching && results.length === 0 && !query && (
+          {!searching && results.length === 0 && !query && (activeTab?.kind !== 'configurable' || activeTab.ready) && (
             <div className="flex flex-col items-center justify-center h-64 text-center text-muted-foreground">
               <PackagePlus className="w-14 h-14 mb-4 opacity-15" />
-              <p className="font-medium">Search the CJ catalog</p>
-              <p className="text-sm mt-1">Type a product name and press Enter</p>
+              <p className="font-medium">{searchIsExactLookup ? `Look up a ${activeTab?.label} product` : `Search the ${activeTab?.label ?? ''} catalog`}</p>
+              <p className="text-sm mt-1">{searchIsExactLookup ? 'Type its exact SKU and press Enter' : 'Type a product name and press Enter'}</p>
             </div>
           )}
 
@@ -492,6 +577,11 @@ export default function ImportProducts() {
                     <p className="text-xs text-muted-foreground px-1">+{selected.variants.length - 15} more</p>
                   )}
                 </div>
+                {costs.length === 0 && selected.variants.length > 0 && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-2">
+                    {activeTab?.label} didn't return a cost for this product — set price/cost manually after import.
+                  </p>
+                )}
               </div>
 
               {/* Market availability */}

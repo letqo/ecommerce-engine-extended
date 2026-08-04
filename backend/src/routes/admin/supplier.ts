@@ -3,12 +3,44 @@ import axios from 'axios'
 import { prisma } from '../../config/database'
 import { requireAdmin, AdminRequest } from '../../middleware/auth'
 import { createError } from '../../middleware/errorHandler'
-import { createAdapter, listAdapters } from '../../suppliers/registry'
+import { createAdapter, getConfigurableAdapter } from '../../suppliers/registry'
 import { env } from '../../config/env'
-import { MarketAvailability } from '../../suppliers/types'
+import { SupplierAdapter, MarketAvailability } from '../../suppliers/types'
 import { computeMarketDeviation, buildDeliveryNote } from '../../suppliers/marketDeviation'
+import { isConfigurableSupplierKey, ConfigurableSupplierKey, SupplierSettings } from '../../suppliers/configurableTypes'
+import { CONFIGURABLE_SUPPLIERS } from '../../suppliers/configurableRegistry'
 
 const router = Router()
+
+// CJ/AliExpress are env-configured singletons (createAdapter). Everything added since
+// (Printful/Gelato/BigBuy/WooBridge) is configured per store via StoreSupplier, so resolving
+// one of those requires a storeId and a lookup — this is that single branch point for both the
+// search and product-detail routes below, so they don't duplicate the store lookup + friendly
+// "not enabled" error.
+async function resolveAdapter(storeId: string | undefined, supplierName: string): Promise<SupplierAdapter> {
+  if (supplierName === 'cj' || supplierName === 'aliexpress') {
+    const adapter = createAdapter(supplierName)
+    if (storeId && 'withStore' in adapter) (adapter as any).withStore(storeId)
+    return adapter
+  }
+
+  const key = supplierName.toUpperCase()
+  if (!isConfigurableSupplierKey(key)) throw createError(`Unknown supplier: ${supplierName}`, 400, 'UNKNOWN_SUPPLIER')
+  if (!storeId) throw createError('No store in context', 400, 'NO_STORE')
+
+  const storeSupplier = await prisma.storeSupplier.findUnique({
+    where: { storeId_supplierKey: { storeId, supplierKey: key as ConfigurableSupplierKey } },
+  })
+  const meta = CONFIGURABLE_SUPPLIERS[key as ConfigurableSupplierKey]
+  if (!storeSupplier?.enabled) {
+    throw createError(
+      `${meta.displayName} isn't enabled for this store yet — set it up in Admin → Integrations first.`,
+      400,
+      'SUPPLIER_NOT_CONFIGURED'
+    )
+  }
+  return getConfigurableAdapter(key as ConfigurableSupplierKey, (storeSupplier.settings ?? {}) as SupplierSettings)
+}
 
 // ── AliExpress OAuth ──
 // /auth + /callback: public popup/redirect flow, not currently linked from the admin UI
@@ -157,8 +189,7 @@ router.get('/search', async (req: AdminRequest, res: Response, next: NextFunctio
   try {
     const { q, page = '1', supplier = 'cj' } = req.query as { q?: string; page?: string; supplier?: string }
     if (!q?.trim()) return res.json({ success: true, data: { products: [], total: 0, page: 1 } })
-    const adapter = createAdapter(supplier)
-    if (req.storeId && 'withStore' in adapter) (adapter as any).withStore(req.storeId)
+    const adapter = await resolveAdapter(req.storeId, supplier)
     const result = await adapter.searchProducts(q.trim(), parseInt(page))
     res.json({ success: true, data: result })
   } catch (err) { next(err) }
@@ -167,8 +198,7 @@ router.get('/search', async (req: AdminRequest, res: Response, next: NextFunctio
 router.get('/product/:supplierId', async (req: AdminRequest, res: Response, next: NextFunction) => {
   try {
     const supplier = (req.query.supplier as string) || 'cj'
-    const adapter = createAdapter(supplier)
-    if (req.storeId && 'withStore' in adapter) (adapter as any).withStore(req.storeId)
+    const adapter = await resolveAdapter(req.storeId, supplier)
     const product = await adapter.getProduct(req.params.supplierId)
 
     const store = req.storeId
@@ -219,6 +249,13 @@ export async function importSupplierProduct(storeId: string | undefined, body: a
   const base = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
   const slug = `${base}-${Date.now()}`
 
+  // CJ/AliExpress keep their own dedicated id columns (pre-existing). Every supplier added
+  // since routes through the generic Product.supplierKey / ProductVariant.supplierVariantRef
+  // pair instead — see classifySupplier() in supplierOrderFulfillment.ts, which is what actually
+  // reads these at order time to know where to send the parcel.
+  const configurableKey = supplierName.toUpperCase()
+  const isConfigurable = isConfigurableSupplierKey(configurableKey)
+
   return prisma.product.create({
     data: {
       title,
@@ -233,6 +270,7 @@ export async function importSupplierProduct(storeId: string | undefined, body: a
       deliveryMaxDays: deliveryMaxDays > 0 ? deliveryMaxDays : null,
       cjProductId: supplierName === 'cj' ? supplierId : undefined,
       aliexpressProductId: supplierName === 'aliexpress' ? supplierId : undefined,
+      supplierKey: isConfigurable ? (configurableKey as ConfigurableSupplierKey) : undefined,
       unavailableMarkets: Array.isArray(unavailableMarkets) ? unavailableMarkets : [],
       deliveryNote: typeof deliveryNote === 'string' && deliveryNote.trim() ? deliveryNote : null,
       images: {
@@ -256,6 +294,7 @@ export async function importSupplierProduct(storeId: string | undefined, body: a
             cjVariantId: supplierName === 'cj' ? v.supplierId : undefined,
             aliexpressSkuId: supplierName === 'aliexpress' ? v.supplierId : undefined,
             aliexpressSkuAttr: supplierName === 'aliexpress' ? (v.skuAttr ?? null) : undefined,
+            supplierVariantRef: isConfigurable ? v.supplierId : undefined,
           }
         }),
       },
