@@ -50,7 +50,7 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
         isShowcase ? 'min-h-[60vh]' : ''
       }`}
       style={
-        bannerUrl
+        bannerUrl && !isShowcase
           ? { backgroundImage: `url(${bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
           : { background: 'var(--hero-bg)' }
       }
@@ -125,19 +125,30 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
         <div className="theme-hero-visual hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5" />
       )}
 
-      {/* Showcase column — a device-screen illustration when there's no real product photo to show yet */}
-      {isShowcase && !bannerUrl && (
+      {/* Showcase column — a real product photo (reusing the store's banner image field, just
+          scoped to this column instead of a full-section background) when one is set, otherwise
+          the device-screen illustration as a placeholder. */}
+      {isShowcase && (
         <div className="theme-hero-showcase hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5">
-          <div className="theme-device">
-            <div className="theme-device-screen theme-device-refresh">
-              <span className="theme-device-month">{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
-              <span className="theme-device-date">{new Date().getDate()}</span>
-              <span className="theme-device-caption">
-                <span>62% battery</span>
-                <span>Refreshed 06:00</span>
-              </span>
+          {bannerUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={bannerUrl}
+              alt=""
+              className="theme-hero-showcase-image max-w-[78%] max-h-[78%] w-auto h-auto object-contain rounded-card shadow-xl"
+            />
+          ) : (
+            <div className="theme-device">
+              <div className="theme-device-screen theme-device-refresh">
+                <span className="theme-device-month">{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
+                <span className="theme-device-date">{new Date().getDate()}</span>
+                <span className="theme-device-caption">
+                  <span>62% battery</span>
+                  <span>Refreshed 06:00</span>
+                </span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
       )}
 
