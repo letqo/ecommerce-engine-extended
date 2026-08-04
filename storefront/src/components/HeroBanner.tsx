@@ -1,6 +1,6 @@
 import { useTranslations } from 'next-intl'
+import Image from 'next/image'
 import { Link } from '@/i18n/navigation'
-import HeroCarousel from './HeroCarousel'
 
 interface HeroBannerProps {
   variant?: string
@@ -35,45 +35,37 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
   const isSplit = variant === 'split'
   const isBanner = variant === 'banner'
   const isShowcase = variant === 'showcase'
+  const showcaseImage = bannerUrls?.[0] ?? bannerUrl ?? null
 
   return (
     <section
       data-theme-section="hero"
       data-variant={variant}
       className={`theme-hero relative ${
-        isSplit
+        isSplit || isShowcase
           ? 'grid grid-cols-1 md:grid-cols-2'
           : ''
       } ${
         isCentered ? 'min-h-[80vh] flex items-center justify-center' : ''
       } ${
         isSplit ? 'min-h-[80vh]' : ''
-      } ${
-        isShowcase ? 'min-h-[70vh] md:min-h-[85vh] flex items-center overflow-hidden' : ''
       }`}
       style={
-        bannerUrls && bannerUrls.length > 1
-          ? undefined
-          : (bannerUrl ?? bannerUrls?.[0])
-            ? { backgroundImage: `url(${bannerUrl ?? bannerUrls?.[0]})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-            : { background: 'var(--hero-bg)' }
+        bannerUrl && !isShowcase
+          ? { backgroundImage: `url(${bannerUrl})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+          : { background: 'var(--hero-bg)' }
       }
     >
-      {isShowcase && bannerUrls && bannerUrls.length > 1 && <HeroCarousel images={bannerUrls} />}
-      {isShowcase && !(bannerUrls && bannerUrls.length > 1) && (bannerUrl ?? bannerUrls?.[0]) && (
-        <div className="theme-hero-bg-scrim absolute inset-0" aria-hidden="true" />
-      )}
-
       <div className="theme-slot theme-slot-hero-before" aria-hidden="true" />
 
       {/* Text content */}
-      <div className={`relative z-10 ${
+      <div className={`${
         isBanner
           ? 'flex flex-col md:flex-row items-center justify-between gap-4 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12'
           : isSplit
             ? 'flex items-center px-6 sm:px-12 lg:px-20 py-20 md:py-0'
             : isShowcase
-              ? 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20'
+              ? 'flex items-center px-6 sm:px-12 lg:px-20 py-20 md:py-0'
               : isCentered
                 ? 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'
                 : 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-24 md:py-32'
@@ -134,20 +126,26 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
         <div className="theme-hero-visual hidden md:flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5" />
       )}
 
-      {/* Showcase with no image at all still gets the placeholder illustration, centered as
-          its own layer rather than a side column, now that the variant is full-bleed background. */}
-      {isShowcase && !bannerUrl && !(bannerUrls && bannerUrls.length > 0) && (
-        <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/5 via-accent/10 to-primary/5">
-          <div className="theme-device">
-            <div className="theme-device-screen theme-device-refresh">
-              <span className="theme-device-month">{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
-              <span className="theme-device-date">{new Date().getDate()}</span>
-              <span className="theme-device-caption">
-                <span>62% battery</span>
-                <span>Refreshed 06:00</span>
-              </span>
+      {/* Showcase column — a plain image next to the headline, no frame/border. Falls back to
+          the device-screen illustration when no real image is set. */}
+      {isShowcase && (
+        <div className="theme-hero-showcase hidden md:flex items-center justify-center p-10">
+          {showcaseImage ? (
+            <div className="relative w-full aspect-[4/3]">
+              <Image src={showcaseImage} alt="" fill className="object-contain" />
             </div>
-          </div>
+          ) : (
+            <div className="theme-device">
+              <div className="theme-device-screen theme-device-refresh">
+                <span className="theme-device-month">{new Date().toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</span>
+                <span className="theme-device-date">{new Date().getDate()}</span>
+                <span className="theme-device-caption">
+                  <span>62% battery</span>
+                  <span>Refreshed 06:00</span>
+                </span>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

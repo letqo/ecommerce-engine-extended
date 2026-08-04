@@ -180,7 +180,7 @@ export default async function HomePage({
           case 'promo-banner':
             return <PromoBannerSection key={key} text={section.text} cta={section.cta} variant={section.variant} imageUrl={section.imageUrl} />
           case 'image-with-text':
-            return <ImageWithTextSection key={key} heading={section.heading} text={section.text} cta={section.cta} imageUrl={section.imageUrl} imagePosition={section.imagePosition} />
+            return <ImageWithTextSection key={key} id={section.id} heading={section.heading} text={section.text} cta={section.cta} imageUrl={section.imageUrl} imagePosition={section.imagePosition} />
           case 'brand-logos':
             return <BrandLogosSection key={key} items={section.items as any} heading={section.heading} />
           case 'new-arrivals':

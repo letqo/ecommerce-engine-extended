@@ -1,7 +1,8 @@
 import Image from 'next/image'
 import Link from 'next/link'
 
-export default function ImageWithTextSection({ heading, text, cta, imageUrl, imagePosition = 'left' }: {
+export default function ImageWithTextSection({ id, heading, text, cta, imageUrl, imagePosition = 'left' }: {
+  id?: string
   heading?: string
   text?: string
   cta?: { label: string; href: string }
@@ -11,7 +12,7 @@ export default function ImageWithTextSection({ heading, text, cta, imageUrl, ima
   if (!heading && !text) return null
 
   return (
-    <section data-theme-section="home-image-text" data-variant={imagePosition} className="theme-home-image-text">
+    <section id={id} data-theme-section="home-image-text" data-variant={imagePosition} className="theme-home-image-text">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
         <div className={`grid grid-cols-1 md:grid-cols-2 gap-12 items-center ${imagePosition === 'right' ? '' : ''}`}>
           <div className={imagePosition === 'right' ? 'order-1' : 'order-2 md:order-1'}>

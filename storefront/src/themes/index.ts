@@ -24,6 +24,7 @@ export interface NavItem {
 export interface HomeSection {
   type: string
   variant?: string
+  id?: string
   eyebrow?: string
   heading?: string
   text?: string
