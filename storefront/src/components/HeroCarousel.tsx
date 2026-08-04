@@ -24,24 +24,29 @@ export default function HeroCarousel({ images }: { images: string[] }) {
 
   return (
     <div
-      className="theme-hero-carousel relative w-full h-full flex items-center justify-center"
+      className="theme-hero-bezel-wrap w-full"
       onMouseEnter={() => setPaused(true)}
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
     >
-      {images.map((url, i) => (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          key={url}
-          src={url}
-          alt=""
-          className="theme-hero-showcase-image absolute max-w-[78%] max-h-[78%] w-auto h-auto object-contain rounded-card shadow-xl transition-opacity duration-700"
-          style={{ opacity: i === index ? 1 : 0 }}
-        />
-      ))}
+      <div className="theme-hero-bezel">
+        <div className="theme-hero-screen relative">
+          <span className="theme-hero-screen-tag">{String(index + 1).padStart(2, '0')} / {String(images.length).padStart(2, '0')}</span>
+          {images.map((url, i) => (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              key={url}
+              src={url}
+              alt=""
+              className="theme-hero-showcase-image absolute inset-0 w-full h-full object-contain transition-opacity duration-700"
+              style={{ opacity: i === index ? 1 : 0 }}
+            />
+          ))}
+        </div>
+      </div>
       {images.length > 1 && (
-        <div className="absolute bottom-3 flex gap-2" role="tablist" aria-label="Hero images">
+        <div className="theme-hero-carousel-dots flex justify-center gap-2 mt-3" role="tablist" aria-label="Hero images">
           {images.map((_, i) => (
             <button
               key={i}

@@ -49,7 +49,7 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
       } ${
         isSplit ? 'min-h-[80vh]' : ''
       } ${
-        isShowcase ? 'min-h-[60vh]' : ''
+        isShowcase ? 'min-h-[75vh] md:min-h-[90vh]' : ''
       }`}
       style={
         bannerUrl && !isShowcase
@@ -135,12 +135,14 @@ export default function HeroBanner({ variant = 'default', eyebrow, headline, sub
           {bannerUrls && bannerUrls.length > 0 ? (
             <HeroCarousel images={bannerUrls} />
           ) : bannerUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={bannerUrl}
-              alt=""
-              className="theme-hero-showcase-image max-w-[78%] max-h-[78%] w-auto h-auto object-contain rounded-card shadow-xl"
-            />
+            <div className="theme-hero-bezel-wrap w-full">
+              <div className="theme-hero-bezel">
+                <div className="theme-hero-screen relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={bannerUrl} alt="" className="theme-hero-showcase-image absolute inset-0 w-full h-full object-contain" />
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="theme-device">
               <div className="theme-device-screen theme-device-refresh">
