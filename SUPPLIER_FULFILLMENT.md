@@ -107,8 +107,11 @@ Printful/Gelato/BigBuy/WooCommerce accounts, so credentials live in the database
   Orders go to `POST /orders?confirm=1` — without `confirm` Printful parks the order as a
   draft a human has to approve, which would silently stall every order. Tracking comes from
   `GET /orders/{id}` → `shipments[0]`, or from the `package_shipped` webhook
-  (`parseWebhookEvent`). Printful does not sign webhooks — protect the callback URL by making
-  it unguessable. Market availability uses `POST /shipping/rates`.
+  (`parseWebhookEvent`), delivered to `POST /api/webhooks/printful/:storeId`
+  (`routes/webhooks/printful.ts`). Printful does not sign webhooks — the store id in the path is
+  the only protection, so treat that URL as a secret. The admin Integrations page shows it
+  (with a copy button) once Printful is expanded — paste it into Printful Dashboard → Settings →
+  Webhooks. Market availability uses `POST /shipping/rates`.
 - **`GelatoAdapter`** — print-on-demand with local production in 30+ countries. Split hosts:
   `order.gelatoapis.com/v4` and `product.gelatoapis.com/v3`, auth via `X-API-KEY`. A Gelato
   "product" is already a fully-specified variant (its `productUid` encodes size/paper/colour),
@@ -141,8 +144,10 @@ supplier #2, #3, #N is configuration, not code:
    variant's `supplierVariantRef` to that supplier's Woo product id. For a *variable* Woo
    product use `"productId:variationId"` — the adapter splits it back apart when ordering.
 4. Optional, for push updates instead of polling: have them add an **Order updated** webhook
-   pointing at your callback, with a shared secret, and paste the same secret into the
-   *Webhook secret* field. WooCommerce signs deliveries as
+   (WooCommerce admin → Settings → Advanced → Webhooks) pointing at
+   `POST /api/webhooks/woo/:storeId` (shown, with a copy button, on the admin Integrations page
+   once this supplier is expanded — that's `routes/webhooks/woo.ts`), with a shared secret, and
+   paste the same secret into the *Webhook secret* field here. WooCommerce signs deliveries as
    `X-WC-Webhook-Signature: base64(HMAC-SHA256(rawBody, secret))`; `verifyWebhookSignature()`
    checks it. **Pass the raw request body** — re-serialising parsed JSON changes byte order and
    the signature will never match.

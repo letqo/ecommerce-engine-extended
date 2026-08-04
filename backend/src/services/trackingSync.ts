@@ -20,10 +20,11 @@ export async function runTrackingSync(): Promise<TrackingSyncResult> {
   // AliExpress — batch query all pending parcels at once
   await syncAliExpressBatch(result)
 
-  // Printful/Gelato/BigBuy/WooBridge have no webhook route mounted yet (Printful/WooBridge
-  // could sign or otherwise authenticate one, Gelato/BigBuy don't support webhooks at all per
-  // configurableRegistry.ts) — polling is the only way any of them get tracking back today.
-  // Every one of them implements getOrderStatus, so this is a single generic pass.
+  // Printful and WooBridge get push updates via /api/webhooks/printful/:storeId and
+  // /api/webhooks/woo/:storeId (see backend/src/routes/webhooks/); Gelato/BigBuy don't support
+  // webhooks at all per configurableRegistry.ts. This poll is still the only path for
+  // Gelato/BigBuy, and a fallback safety net for the other two — every configurable supplier
+  // implements getOrderStatus, so this is a single generic pass over all of them.
   for (const key of CONFIGURABLE_SUPPLIER_KEYS) {
     await syncConfigurableSupplier(key, result)
   }
@@ -171,7 +172,7 @@ async function syncConfigurableSupplier(key: ConfigurableSupplierKey, result: Tr
   }
 }
 
-async function updateSupplierOrderWithTracking(supplierOrderId: string, data: {
+export async function updateSupplierOrderWithTracking(supplierOrderId: string, data: {
   trackingNumber: string
   trackingUrl?: string
   carrier?: string
