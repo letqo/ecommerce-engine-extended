@@ -40,7 +40,7 @@ export interface ThemeSections {
   footer: { variant: 'default' | 'minimal' | 'newsletter' | 'mega' }
   home: HomeSection[]
   productsGrid: 'grid-4' | 'grid-3' | 'grid-2'
-  productDetail: 'side-by-side' | 'stacked' | 'gallery-sticky'
+  productDetail: 'side-by-side' | 'stacked' | 'gallery-sticky' | 'spec-sheet'
   productCard: 'default' | 'overlay' | 'detailed' | 'plate'
   cartLayout: 'sidebar' | 'bottom-bar'
   checkoutLayout: 'two-column' | 'single-column'
